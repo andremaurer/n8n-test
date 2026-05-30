@@ -4,7 +4,7 @@ import { computeNatalChart, NatalChart } from "./astrology";
 import { computeHumanDesign, HumanDesignChart } from "./humandesign";
 import { computeNumerology, NumerologyResult } from "./numerology";
 import { computeFire, FireResult } from "./fire";
-import { scoreBigFive, BigFiveScores } from "./assessments";
+import { scoreBigFive, BigFiveScores, RiasecScores } from "./assessments";
 
 export interface FullProfile {
   person: Person;
@@ -12,6 +12,7 @@ export interface FullProfile {
   hd?: HumanDesignChart;
   numerology?: NumerologyResult;
   bigFive?: BigFiveScores;
+  riasec?: RiasecScores;
   fire?: FireResult;
 }
 
@@ -50,6 +51,13 @@ export function buildProfile(
         out.bigFive = JSON.parse(bigFive.scores);
       } catch {}
     }
+  }
+
+  const riasec = assessments.find((a) => a.type === "RIASEC");
+  if (riasec) {
+    try {
+      out.riasec = JSON.parse(riasec.scores);
+    } catch {}
   }
 
   if (finance) {

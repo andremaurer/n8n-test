@@ -118,3 +118,62 @@ export function describeBigFive(scores: BigFiveScores): { factor: BigFiveFactor;
     return { factor: f, name: meta.name, score: s, percent: pct, text };
   });
 }
+
+// ---------------------------------------------------------------------------
+// RIASEC (Holland Codes) — interest profile, feeds business-field matching.
+// 🟢 Evidence-based (Holland's vocational theory). Items from open O*NET/IPIP pools.
+
+export type RiasecType = "R" | "I" | "A" | "S" | "E" | "C";
+
+export const RIASEC_TYPES: Record<RiasecType, { name: string; desc: string; fields: string }> = {
+  R: { name: "Realistisch", desc: "praktisch, handwerklich, technisch", fields: "Handwerk, Technik, Ingenieurwesen, Produktion, Outdoor" },
+  I: { name: "Investigativ", desc: "analytisch, forschend, neugierig", fields: "Forschung, Daten/IT, Wissenschaft, Strategie, Analyse" },
+  A: { name: "Künstlerisch", desc: "kreativ, ausdrucksstark, originell", fields: "Design, Content, Medien, Marke, Produktgestaltung" },
+  S: { name: "Sozial", desc: "helfend, lehrend, beziehungsorientiert", fields: "Coaching, Bildung, Beratung, Gesundheit, Community" },
+  E: { name: "Unternehmerisch", desc: "führend, überzeugend, wagemutig", fields: "Vertrieb, Gründung, Führung, Marketing, Deals" },
+  C: { name: "Konventionell", desc: "ordnend, genau, prozessorientiert", fields: "Finanzen, Operations, Buchhaltung, Recht, Admin" },
+};
+
+interface RiasecItem { id: number; text: string; type: RiasecType }
+
+export const RIASEC_ITEMS: RiasecItem[] = [
+  { id: 1, text: "An Maschinen, Geräten oder Werkzeugen arbeiten", type: "R" },
+  { id: 2, text: "Etwas mit den Händen bauen oder reparieren", type: "R" },
+  { id: 3, text: "Draussen / körperlich aktiv arbeiten", type: "R" },
+  { id: 4, text: "Wissenschaftliche Probleme durchdenken", type: "I" },
+  { id: 5, text: "Daten analysieren und Muster finden", type: "I" },
+  { id: 6, text: "Komplexe Zusammenhänge erforschen", type: "I" },
+  { id: 7, text: "Etwas Kreatives gestalten (Design, Text, Musik)", type: "A" },
+  { id: 8, text: "Eigene Ideen originell ausdrücken", type: "A" },
+  { id: 9, text: "In einem freien, unkonventionellen Umfeld arbeiten", type: "A" },
+  { id: 10, text: "Anderen helfen oder etwas beibringen", type: "S" },
+  { id: 11, text: "Menschen beraten und begleiten", type: "S" },
+  { id: 12, text: "In einem Team eng zusammenarbeiten", type: "S" },
+  { id: 13, text: "Ein Projekt oder Geschäft leiten", type: "E" },
+  { id: 14, text: "Andere überzeugen und etwas verkaufen", type: "E" },
+  { id: 15, text: "Risiken eingehen, um etwas aufzubauen", type: "E" },
+  { id: 16, text: "Mit Zahlen, Budgets und Plänen arbeiten", type: "C" },
+  { id: 17, text: "Klare Abläufe und Ordnung schaffen", type: "C" },
+  { id: 18, text: "Genau und sorgfältig Details verwalten", type: "C" },
+];
+
+export type RiasecScores = Record<RiasecType, number>;
+
+export function scoreRiasec(answers: Record<number, number>): RiasecScores {
+  const acc: RiasecScores = { R: 0, I: 0, A: 0, S: 0, E: 0, C: 0 };
+  const count: RiasecScores = { R: 0, I: 0, A: 0, S: 0, E: 0, C: 0 };
+  for (const it of RIASEC_ITEMS) {
+    const v = answers[it.id];
+    if (!v) continue;
+    acc[it.type] += v;
+    count[it.type] += 1;
+  }
+  (Object.keys(acc) as RiasecType[]).forEach((t) => {
+    acc[t] = count[t] ? Math.round((acc[t] / count[t]) * 100) / 100 : 0;
+  });
+  return acc;
+}
+
+export function hollandCode(scores: RiasecScores): RiasecType[] {
+  return (Object.keys(scores) as RiasecType[]).sort((a, b) => scores[b] - scores[a]).slice(0, 3);
+}

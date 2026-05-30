@@ -90,6 +90,19 @@ export async function saveBigFive(personId: string, answers: Record<number, numb
   revalidatePath("/");
 }
 
+export async function saveRiasec(personId: string, answers: Record<number, number>, scores: unknown) {
+  await prisma.assessmentResult.create({
+    data: {
+      personId,
+      type: "RIASEC",
+      answers: JSON.stringify(answers),
+      scores: JSON.stringify(scores),
+    },
+  });
+  revalidatePath(`/people/${personId}`);
+  revalidatePath("/business");
+}
+
 // ---- Business ideas --------------------------------------------------------
 export async function addBusinessIdea(formData: FormData) {
   const personId = String(formData.get("personId"));

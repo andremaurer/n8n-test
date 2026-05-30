@@ -4,7 +4,7 @@ import { getPersonProfile } from "@/lib/queries";
 import { Card, Stat, Bar, Empty, EvidenceBadge } from "@/components/ui";
 import { updatePerson, deletePerson } from "@/lib/actions";
 import { LIFE_PATH_MEANINGS } from "@/lib/numerology";
-import { BIG_FIVE_FACTORS, describeBigFive } from "@/lib/assessments";
+import { BIG_FIVE_FACTORS, describeBigFive, RIASEC_TYPES, RiasecType, hollandCode } from "@/lib/assessments";
 import { CENTER_LABELS } from "@/lib/humandesign";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 export default async function PersonPage({ params }: { params: { id: string } }) {
   const profile = await getPersonProfile(params.id);
   if (!profile) notFound();
-  const { person, astro, hd, numerology, bigFive } = profile;
+  const { person, astro, hd, numerology, bigFive, riasec } = profile;
+  const code = riasec ? hollandCode(riasec) : null;
 
   return (
     <div className="space-y-6">
@@ -108,6 +109,29 @@ export default async function PersonPage({ params }: { params: { id: string } })
           </div>
         ) : (
           <Empty>Noch kein Big-Five-Ergebnis — die belastbarste Datenquelle über diese Person.</Empty>
+        )}
+      </Card>
+
+      {/* RIASEC interests */}
+      <Card title="Interessen · RIASEC (Holland)" level="EVIDENCE" action={<Link href={`/assessments/${person.id}/riasec`} className="btn-ghost">{riasec ? "Erneut testen" : "Test machen"}</Link>}>
+        {riasec && code ? (
+          <div className="space-y-3">
+            <div className="text-sm text-slate-300">
+              Holland-Code: <span className="font-semibold text-white">{code.join("")}</span> ·{" "}
+              passende Felder: <span className="text-slate-200">{code.map((c) => RIASEC_TYPES[c].fields).join("; ")}</span>
+            </div>
+            {(Object.keys(RIASEC_TYPES) as RiasecType[]).map((t) => (
+              <div key={t}>
+                <div className="mb-1 flex justify-between text-sm">
+                  <span className="font-medium text-white">{RIASEC_TYPES[t].name}</span>
+                  <span className="text-slate-400">{riasec[t].toFixed(1)} / 5 · {RIASEC_TYPES[t].desc}</span>
+                </div>
+                <Bar value={((riasec[t] - 1) / 4) * 100} color={code.includes(t) ? "#34d399" : "#7c6cf6"} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Empty>Noch kein Interessen-Profil — der direkteste Input für passende Geschäftsfelder.</Empty>
         )}
       </Card>
 

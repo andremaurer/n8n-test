@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { getSelf } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { scoreBusinessIdea, SCORE_DIMENSIONS } from "@/lib/business";
 import { Card, Bar, Empty } from "@/components/ui";
 import { addBusinessIdea, deleteBusinessIdea } from "@/lib/actions";
+import { RIASEC_TYPES, RiasecType, hollandCode, RiasecScores } from "@/lib/assessments";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,11 @@ export default async function BusinessPage() {
   const self = await getSelf();
   if (!self) return <Empty>Lege zuerst dein Profil an.</Empty>;
   const ideas = await prisma.businessIdea.findMany({ where: { personId: self.id } });
+  const riasecRec = await prisma.assessmentResult.findFirst({ where: { personId: self.id, type: "RIASEC" }, orderBy: { createdAt: "desc" } });
+  let code: RiasecType[] | null = null;
+  if (riasecRec) {
+    try { code = hollandCode(JSON.parse(riasecRec.scores) as RiasecScores); } catch {}
+  }
   const ranked = ideas
     .map((i) => ({ idea: i, ...scoreBusinessIdea(i) }))
     .sort((a, b) => b.percent - a.percent);
@@ -20,6 +27,23 @@ export default async function BusinessPage() {
         <h1 className="text-3xl font-bold text-white">Geschäftsfelder</h1>
         <p className="mt-1 text-slate-400">Ideen gegen deine Stärken und den Markt bewerten — gewichtet auf das Freiheits-Ziel (Fit, Skalierbarkeit, Passiv-Potenzial zählen am meisten).</p>
       </header>
+
+      {code ? (
+        <Card title="Aus deinem Interessen-Profil" level="EVIDENCE">
+          <p className="text-sm text-slate-300">
+            Holland-Code <span className="font-semibold text-white">{code.join("")}</span> →{" "}
+            naheliegende Felder: <span className="text-slate-200">{code.map((c) => RIASEC_TYPES[c].fields).join("; ")}</span>.
+          </p>
+          <p className="mt-1 text-xs text-slate-500">Nutze diese Richtungen als Ausgangspunkt und bewerte konkrete Ideen unten.</p>
+        </Card>
+      ) : (
+        <Card>
+          <p className="text-sm text-slate-300">
+            Tipp: Mach den <Link href={`/assessments/${self.id}/riasec`} className="text-accent-soft underline">Interessen-Test (RIASEC)</Link> —
+            er schlägt dir passende Geschäftsfeld-Richtungen vor.
+          </p>
+        </Card>
+      )}
 
       {ranked.length === 0 ? (
         <Empty>Noch keine Ideen erfasst. Trage unten deine erste ein.</Empty>
