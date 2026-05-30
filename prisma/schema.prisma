@@ -1,0 +1,189 @@
+// Life-Optimization-Planner — local single-user data model (SQLite)
+// Privacy-first: all data stays in a local SQLite file by default.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// A person whose life/profile we analyse: you, or a family/team member.
+model Person {
+  id         String   @id @default(cuid())
+  name       String
+  role       String   @default("SELF") // SELF | FAMILY | TEAM | OTHER
+  // Birth data (editable in the UI; drives astrology, human design, numerology)
+  birthDate  String? // ISO date "YYYY-MM-DD"
+  birthTime  String? // "HH:MM" (local clock time at birth place); null = unknown
+  birthPlace String?
+  birthLat   Float?
+  birthLng   Float?
+  timezone   String? // IANA tz, e.g. "Europe/Zurich"
+  gender     String?
+  notes      String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  assessments       AssessmentResult[]
+  goals             Goal[]
+  lifePhases        LifePhase[]
+  journalEntries    JournalEntry[]
+  habits            Habit[]
+  finance           FinanceProfile?
+  memberships       ConstellationMember[]
+  businessIdeas     BusinessIdea[]
+}
+
+// Result of a psychometric questionnaire (Big Five, RIASEC, Enneagram, ...).
+model AssessmentResult {
+  id        String   @id @default(cuid())
+  personId  String
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  type      String // BIG_FIVE | HEXACO | RIASEC | ENNEAGRAM | DISC | VIA | VALUES
+  scores    String // JSON: { dimension: number, ... }
+  answers   String? // JSON: raw item answers
+  createdAt DateTime @default(now())
+
+  @@index([personId, type])
+}
+
+// Goals across horizons (1 / 3 / 10 years) and life areas.
+model Goal {
+  id        String   @id @default(cuid())
+  personId  String
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  horizon   String   @default("ONE_YEAR") // ONE_YEAR | THREE_YEARS | TEN_YEARS | LIFE
+  area      String   @default("GENERAL")  // CAREER | FINANCE | FAMILY | HEALTH | GROWTH | GENERAL
+  text      String
+  status    String   @default("OPEN") // OPEN | IN_PROGRESS | DONE | DROPPED
+  createdAt DateTime @default(now())
+
+  @@index([personId])
+}
+
+// A life phase / chapter with priorities and open decisions.
+model LifePhase {
+  id         String   @id @default(cuid())
+  personId   String
+  person     Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  title      String
+  area       String   @default("GENERAL")
+  startDate  String?
+  endDate    String?
+  status     String   @default("ACTIVE") // PLANNED | ACTIVE | CLOSED
+  priorities String? // JSON array of strings
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  @@index([personId])
+}
+
+// Reflection journal (also feeds the "current, specific to me" layer).
+model JournalEntry {
+  id        String   @id @default(cuid())
+  personId  String
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  date      String // ISO date
+  mood      Int? // 1-10
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([personId])
+}
+
+// Habits — the evidence-based translation of "manifestation"/Geldanziehung.
+model Habit {
+  id        String     @id @default(cuid())
+  personId  String
+  person    Person     @relation(fields: [personId], references: [id], onDelete: Cascade)
+  title     String
+  cadence   String     @default("DAILY") // DAILY | WEEKLY
+  category  String     @default("MINDSET") // MINDSET | FINANCE | HEALTH | GROWTH
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  logs      HabitLog[]
+
+  @@index([personId])
+}
+
+model HabitLog {
+  id      String @id @default(cuid())
+  habitId String
+  habit   Habit  @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  date    String // ISO date
+  done    Boolean @default(true)
+
+  @@unique([habitId, date])
+}
+
+// Financial profile — drives the FIRE / freedom calculator.
+model FinanceProfile {
+  id                  String  @id @default(cuid())
+  personId            String  @unique
+  person              Person  @relation(fields: [personId], references: [id], onDelete: Cascade)
+  currency            String  @default("CHF")
+  monthlyIncomeActive  Float  @default(0)
+  monthlyIncomePassive Float  @default(0)
+  monthlyExpenses      Float  @default(0)
+  netWorth             Float  @default(0)
+  debt                 Float  @default(0)
+  // FIRE assumptions
+  withdrawalRate       Float  @default(0.04) // 4% rule
+  expectedReturn       Float  @default(0.05) // real annual return
+  targetMonthlySpend   Float  @default(0)    // desired spend in freedom (0 = use expenses)
+  updatedAt            DateTime @updatedAt
+}
+
+// Candidate business fields, scored against fit + market.
+model BusinessIdea {
+  id           String   @id @default(cuid())
+  personId     String
+  person       Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  // 1-5 scores
+  fitStrengths  Int     @default(3) // matches my strengths
+  fitValues     Int     @default(3) // matches my values/personality
+  marketSize    Int     @default(3)
+  scalability   Int     @default(3)
+  timeToCash    Int     @default(3) // 5 = fast
+  capitalNeed   Int     @default(3) // 5 = low capital need (better)
+  passiveness   Int     @default(3) // 5 = can become passive
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  @@index([personId])
+}
+
+// A family or team constellation.
+model Constellation {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   @default("FAMILY") // FAMILY | TEAM
+  notes     String?
+  createdAt DateTime @default(now())
+  members   ConstellationMember[]
+}
+
+model ConstellationMember {
+  id              String        @id @default(cuid())
+  constellationId String
+  constellation   Constellation @relation(fields: [constellationId], references: [id], onDelete: Cascade)
+  personId        String
+  person          Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
+  roleLabel       String? // e.g. "Vater", "CTO", "Mentor"
+
+  @@unique([constellationId, personId])
+}
+
+// App-level settings (singleton row id = "app").
+model AppSettings {
+  id            String  @id @default("app")
+  selfPersonId  String?
+  displayName   String?
+  updatedAt     DateTime @updatedAt
+}
