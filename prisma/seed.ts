@@ -13,9 +13,10 @@ async function main() {
         role: "SELF",
         birthDate: "1989-06-01",
         birthTime: "12:37",
-        birthPlace: null, // add your birth place to unlock ascendant & houses
+        birthPlace: "Bern, Schweiz",
+        birthLat: 46.9481,
+        birthLng: 7.4474,
         timezone: "Europe/Zurich",
-        notes: "Geburtsort ergänzen, um Aszendent/Häuser zu berechnen.",
         finance: {
           create: {
             currency: "CHF",
