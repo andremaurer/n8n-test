@@ -1,10 +1,8 @@
 "use server";
 
-"use server";
-
 import { prisma } from "./db";
 import { revalidatePath } from "next/cache";
-import { askProfile, type AskResult } from "./ai";
+import { askProfile, reviewTodos, type AskResult } from "./ai";
 import { getSelfSynthesisInput } from "./queries";
 
 // Chat: ask a question against your own profile + knowledge base.
@@ -12,6 +10,127 @@ export async function askMyProfile(question: string): Promise<AskResult> {
   const input = await getSelfSynthesisInput();
   if (!input) return { source: "fallback", answer: "Kein Profil vorhanden.", sources: [] };
   return askProfile(question, input as any);
+}
+
+// ---- Todos -----------------------------------------------------------------
+export async function addTodo(formData: FormData) {
+  const personId = String(formData.get("personId"));
+  await prisma.todo.create({
+    data: {
+      personId,
+      title: String(formData.get("title") || "Todo"),
+      goalId: str(formData.get("goalId")),
+      priority: String(formData.get("priority") || "MEDIUM"),
+      effortMin: int(formData.get("effortMin")) || 30,
+      due: str(formData.get("due")),
+    },
+  });
+  revalidatePath("/todos");
+  revalidatePath("/");
+}
+
+export async function setTodoStatus(formData: FormData) {
+  const id = String(formData.get("id"));
+  const status = String(formData.get("status"));
+  await prisma.todo.update({
+    where: { id },
+    data: { status, completedAt: status === "DONE" ? new Date().toISOString() : null },
+  });
+  revalidatePath("/todos");
+  revalidatePath("/");
+}
+
+export async function updateTodo(formData: FormData) {
+  await prisma.todo.update({
+    where: { id: String(formData.get("id")) },
+    data: {
+      title: String(formData.get("title") || "Todo"),
+      goalId: str(formData.get("goalId")),
+      priority: String(formData.get("priority") || "MEDIUM"),
+      effortMin: int(formData.get("effortMin")) || 30,
+      due: str(formData.get("due")),
+    },
+  });
+  revalidatePath("/todos");
+}
+
+export async function deleteTodo(formData: FormData) {
+  await prisma.todo.delete({ where: { id: String(formData.get("id")) } });
+  revalidatePath("/todos");
+  revalidatePath("/");
+}
+
+// AI rück-check: does each open todo move a goal forward, or is it busywork?
+export async function runTodoReview(): Promise<{ reviewed: number; source: string }> {
+  const self = await prisma.person.findFirst({ where: { role: "SELF" } });
+  if (!self) return { reviewed: 0, source: "none" };
+  const [todos, goals] = await Promise.all([
+    prisma.todo.findMany({ where: { personId: self.id, status: { in: ["OPEN", "DOING"] } } }),
+    prisma.goal.findMany({ where: { personId: self.id, status: { not: "DONE" } } }),
+  ]);
+  if (todos.length === 0) return { reviewed: 0, source: "none" };
+  const result = await reviewTodos(
+    todos.map((t) => ({ id: t.id, title: t.title, goalId: t.goalId })),
+    goals.map((g) => ({ id: g.id, text: g.text, area: g.area, horizon: g.horizon }))
+  );
+  for (const r of result.items) {
+    await prisma.todo.update({
+      where: { id: r.id },
+      data: { alignment: r.alignment, aiNote: r.note, goalId: r.goalId ?? undefined },
+    });
+  }
+  revalidatePath("/todos");
+  return { reviewed: result.items.length, source: result.source };
+}
+
+// ---- Time entries (tracker / calendar / manual) ----------------------------
+export async function addTimeEntry(formData: FormData) {
+  const personId = String(formData.get("personId"));
+  const start = String(formData.get("start") || new Date().toISOString());
+  await prisma.timeEntry.create({
+    data: {
+      personId,
+      start,
+      minutes: int(formData.get("minutes")) || 15,
+      activity: String(formData.get("activity") || ""),
+      category: str(formData.get("category")),
+      goalId: str(formData.get("goalId")),
+      source: "MANUAL",
+    },
+  });
+  revalidatePath("/time");
+}
+
+export async function deleteTimeEntry(formData: FormData) {
+  await prisma.timeEntry.delete({ where: { id: String(formData.get("id")) } });
+  revalidatePath("/time");
+}
+
+export async function clearTimeRange(formData: FormData) {
+  const personId = String(formData.get("personId"));
+  const since = String(formData.get("since") || "");
+  await prisma.timeEntry.deleteMany({ where: { personId, start: { gte: since } } });
+  revalidatePath("/time");
+}
+
+export async function importCalendarIcs(formData: FormData) {
+  const personId = String(formData.get("personId"));
+  const file = formData.get("file");
+  if (!file || typeof file === "string") return;
+  const text = await (file as File).text();
+  const { parseIcs, guessCategory } = await import("./timeanalysis");
+  const events = parseIcs(text);
+  for (const ev of events) {
+    if (ev.minutes <= 0) continue;
+    try {
+      await prisma.timeEntry.upsert({
+        where: { personId_source_externalId: { personId, source: "CALENDAR", externalId: ev.uid } },
+        update: { activity: ev.title, minutes: ev.minutes, start: ev.start, end: ev.end, category: guessCategory(ev.title) },
+        create: { personId, start: ev.start, end: ev.end, minutes: ev.minutes, activity: ev.title, category: guessCategory(ev.title), source: "CALENDAR", externalId: ev.uid },
+      });
+    } catch {}
+  }
+  revalidatePath("/time");
 }
 
 // ---- People ----------------------------------------------------------------

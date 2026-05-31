@@ -43,6 +43,49 @@ model Person {
   accounts          Account[]
   revenueStreams    RevenueStream[]
   experiments       Experiment[]
+  todos             Todo[]
+  timeEntries       TimeEntry[]
+}
+
+// Todo with goal alignment + AI review verdict.
+model Todo {
+  id           String   @id @default(cuid())
+  personId     String
+  person       Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  title        String
+  goalId       String?  // optional link to a Goal
+  goal         Goal?    @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  priority     String   @default("MEDIUM") // LOW | MEDIUM | HIGH
+  effortMin    Int      @default(30)        // estimated minutes
+  due          String?  // ISO date
+  status       String   @default("OPEN")    // OPEN | DOING | DONE | DROPPED
+  // AI review
+  alignment    String?  // ALIGNED | NEUTRAL | BUSYWORK
+  aiNote       String?
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  completedAt  String?
+
+  @@index([personId, status])
+}
+
+// A time entry — from calendar (ICS) or the 15-min Mac activity tracker.
+model TimeEntry {
+  id          String   @id @default(cuid())
+  personId    String
+  person      Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  start       String   // ISO datetime
+  end         String?  // ISO datetime (null = instantaneous sample)
+  minutes     Int      @default(15)
+  activity    String   // free text from tracker / event title
+  category    String?  // BUSINESS | ADMIN | LEARNING | FAMILY | HEALTH | REST | OTHER
+  goalId      String?
+  source      String   @default("MANUAL") // MANUAL | TRACKER | CALENDAR
+  externalId  String?  // dedup key (ICS UID, tracker sample id)
+  createdAt   DateTime @default(now())
+
+  @@index([personId, start])
+  @@unique([personId, source, externalId])
 }
 
 // Market-validation experiment — test an offer before investing heavily.
@@ -190,6 +233,7 @@ model Goal {
   text      String
   status    String   @default("OPEN") // OPEN | IN_PROGRESS | DONE | DROPPED
   createdAt DateTime @default(now())
+  todos     Todo[]
 
   @@index([personId])
 }

@@ -205,3 +205,93 @@ export async function askProfile(question: string, p: SynthesisProfile): Promise
     return { source: "fallback", answer: "KI aktuell nicht erreichbar. Bitte später erneut versuchen.", sources: snippetCitations(snips) };
   }
 }
+
+// --- Todo review: align each todo to a goal, flag busywork ------------------
+export interface TodoReviewItem {
+  id: string;
+  alignment: "ALIGNED" | "NEUTRAL" | "BUSYWORK";
+  note: string;
+  goalId?: string | null;
+}
+export interface TodoReviewResult {
+  source: "ai" | "fallback";
+  items: TodoReviewItem[];
+}
+
+const ALIGN_KEYWORDS: Record<string, string[]> = {
+  CAREER: ["kunde", "angebot", "akquise", "pitch", "projekt", "ai", "ki", "video", "foto", "shoot", "sales", "bni", "retainer", "umsatz"],
+  FINANCE: ["rechnung", "budget", "invest", "sparen", "steuer", "konto", "mintos", "3a"],
+  GROWTH: ["lernen", "kurs", "weiterbildung", "buch", "tutorial"],
+  HEALTH: ["sport", "gym", "arzt", "schlaf", "training"],
+  FAMILY: ["familie", "kind", "frau", "partner"],
+};
+
+// Whole-word keyword match (avoids "ai" matching inside "mails").
+function hasKeyword(text: string, kw: string): boolean {
+  return new RegExp(`(^|[^a-zäöü])${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-zäöü]|$)`, "i").test(text);
+}
+function matchGoal(lc: string, goals: { id: string; area: string }[]): string | null {
+  for (const g of goals) {
+    const kws = ALIGN_KEYWORDS[g.area] ?? [];
+    if (kws.some((k) => hasKeyword(lc, k))) return g.id;
+  }
+  return null;
+}
+
+export async function reviewTodos(
+  todos: { id: string; title: string; goalId: string | null }[],
+  goals: { id: string; text: string; area: string; horizon: string }[]
+): Promise<TodoReviewResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+
+  if (!apiKey) {
+    // Deterministic: match todo keywords against goal areas; flag vague/admin as busywork.
+    const items: TodoReviewItem[] = todos.map((t) => {
+      const lc = t.title.toLowerCase();
+      if (t.goalId) return { id: t.id, alignment: "ALIGNED", note: "Bereits einem Ziel zugeordnet.", goalId: t.goalId };
+      const busy = /mail|admin|aufräum|ablage|sortier|telefon zurück|orga|diverses|allgemein/.test(lc);
+      // Busywork wins over a loose keyword match.
+      const matchedGoal = busy ? null : matchGoal(lc, goals);
+      if (matchedGoal) return { id: t.id, alignment: "ALIGNED", note: "Passt zu einem deiner Ziele (Auto-Match).", goalId: matchedGoal };
+      if (busy) return { id: t.id, alignment: "BUSYWORK", note: "Wirkt nach Pflicht/Admin ohne Zielbezug — delegieren, bündeln oder streichen?", goalId: null };
+      return { id: t.id, alignment: "NEUTRAL", note: "Kein klarer Zielbezug erkennbar. Bewusst zuordnen oder hinterfragen.", goalId: null };
+    });
+    return { source: "fallback", items };
+  }
+
+  try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey });
+    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+    const prompt = `Du bist ein Produktivitäts-Coach mit Fokus auf finanzielle Freiheit.
+Ziele des Nutzers (id · Bereich · Horizont · Text):
+${goals.map((g) => `${g.id} · ${g.area} · ${g.horizon} · ${g.text}`).join("\n") || "(keine Ziele erfasst)"}
+
+Offene Todos (id · Titel):
+${todos.map((t) => `${t.id} · ${t.title}`).join("\n")}
+
+Bewerte JEDES Todo: zahlt es auf ein Ziel ein (ALIGNED), ist es neutral/nötig (NEUTRAL),
+oder ist es Beschäftigung ohne Hebel (BUSYWORK)? Ordne wenn möglich die passende goalId zu.
+Antworte als striktes JSON: {"items":[{"id","alignment","note","goalId"}]}. Deutsch, knappe Notiz.`;
+    const msg = await client.messages.create({
+      model,
+      max_tokens: 1500,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = msg.content.filter((c) => c.type === "text").map((c: any) => c.text).join("");
+    const parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+    return { source: "ai", items: parsed.items ?? [] };
+  } catch {
+    // Fall back to the deterministic matcher (no recursion into the API).
+    const items: TodoReviewItem[] = todos.map((t) => {
+      const lc = t.title.toLowerCase();
+      if (t.goalId) return { id: t.id, alignment: "ALIGNED", note: "Bereits einem Ziel zugeordnet.", goalId: t.goalId };
+      const busy = /mail|admin|aufräum|ablage|sortier|orga|diverses|allgemein/.test(lc);
+      const matchedGoal = busy ? null : matchGoal(lc, goals);
+      if (matchedGoal) return { id: t.id, alignment: "ALIGNED", note: "Passt zu einem Ziel (Auto-Match).", goalId: matchedGoal };
+      if (busy) return { id: t.id, alignment: "BUSYWORK", note: "Wirkt nach Admin ohne Zielbezug.", goalId: null };
+      return { id: t.id, alignment: "NEUTRAL", note: "Kein klarer Zielbezug.", goalId: null };
+    });
+    return { source: "fallback", items };
+  }
+}
