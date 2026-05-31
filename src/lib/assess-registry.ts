@@ -239,12 +239,118 @@ const DISC: LikertAssessment = {
   summarize: (s) => "Stil: " + topDims(s, 2).join(""),
 };
 
+// --- Grit (🟢) — Durchhaltevermögen, Prädiktor für Langzeit-Erfolg ----------
+const GRIT: LikertAssessment = {
+  key: "GRIT",
+  title: "Grit (Durchhaltevermögen)",
+  evidence: "EVIDENCE",
+  intro: "Leidenschaft und Ausdauer für langfristige Ziele (Duckworth). Starker Prädiktor dafür, ob du Vorhaben wie den Vermögensaufbau durchziehst.",
+  scale: FIVE,
+  dimensions: {
+    PE: { name: "Ausdauer (Anstrengung)", desc: "dranbleiben trotz Rückschlägen" },
+    PA: { name: "Beständigkeit (Interesse)", desc: "Fokus über Jahre halten" },
+  },
+  items: [
+    { id: 1, text: "Rückschläge entmutigen mich nicht — ich gebe nicht leicht auf.", dim: "PE" },
+    { id: 2, text: "Ich bin fleissig und arbeite hart.", dim: "PE" },
+    { id: 3, text: "Ich beende, was ich beginne.", dim: "PE" },
+    { id: 4, text: "Ich habe Ziele über Jahre verfolgt und erreicht.", dim: "PE" },
+    { id: 5, text: "Ich arbeite hart, auch wenn es lange dauert.", dim: "PE" },
+    { id: 6, text: "Neue Ideen lenken mich manchmal von alten ab.", dim: "PA", reverse: true },
+    { id: 7, text: "Ich verliere kurzfristig das Interesse an Projekten.", dim: "PA", reverse: true },
+    { id: 8, text: "Ich war zeitweise besessen von einer Idee, verlor dann aber das Interesse.", dim: "PA", reverse: true },
+    { id: 9, text: "Ich habe Mühe, meinen Fokus über längere Zeit zu halten.", dim: "PA", reverse: true },
+    { id: 10, text: "Ich setze mir ein Ziel, wechsle es aber später oft.", dim: "PA", reverse: true },
+  ],
+  summarize: (s) => `Grit-Mittel: ${(((s.PE ?? 0) + (s.PA ?? 0)) / 2).toFixed(1)}/5`,
+};
+
+// --- Locus of Control (🟢) — interne vs. externe Kontrollüberzeugung --------
+const LOC: LikertAssessment = {
+  key: "LOC",
+  title: "Kontrollüberzeugung (Locus of Control)",
+  evidence: "EVIDENCE",
+  intro: "Glaubst du, dein Leben selbst zu steuern (intern) oder von Umständen/Glück bestimmt (extern)? Interne Überzeugung korreliert mit Einkommen & unternehmerischem Erfolg.",
+  scale: FIVE,
+  dimensions: {
+    INT: { name: "Intern", desc: "Ich gestalte meine Ergebnisse selbst" },
+    EXT: { name: "Extern", desc: "Umstände/Glück bestimmen mich" },
+  },
+  items: [
+    { id: 1, text: "Mein Erfolg hängt vor allem von meiner eigenen Anstrengung ab.", dim: "INT" },
+    { id: 2, text: "Wenn ich Pläne mache, kann ich sie auch umsetzen.", dim: "INT" },
+    { id: 3, text: "Was mit mir passiert, ist mein eigenes Werk.", dim: "INT" },
+    { id: 4, text: "Ich kann mein Leben weitgehend selbst bestimmen.", dim: "INT" },
+    { id: 5, text: "Probleme löse ich, indem ich aktiv handle.", dim: "INT" },
+    { id: 6, text: "Vieles in meinem Leben ist Glückssache.", dim: "EXT", reverse: false },
+    { id: 7, text: "Ohne die richtigen Beziehungen kommt man nicht weit.", dim: "EXT" },
+    { id: 8, text: "Was ich erreiche, hängt stark von äusseren Umständen ab.", dim: "EXT" },
+    { id: 9, text: "Es hat wenig Sinn zu planen — es kommt sowieso anders.", dim: "EXT" },
+    { id: 10, text: "Andere Menschen haben mehr Einfluss auf mein Leben als ich.", dim: "EXT" },
+  ],
+  summarize: (s) => ((s.INT ?? 0) >= (s.EXT ?? 0) ? "überwiegend intern (gut)" : "überwiegend extern"),
+};
+
+// --- Finanzielle Risikotoleranz (🟢) ----------------------------------------
+const RISK: LikertAssessment = {
+  key: "RISK",
+  title: "Finanzielle Risikotoleranz",
+  evidence: "EVIDENCE",
+  intro: "Wie viel Schwankung/Risiko verträgst du bei Geld? Bestimmt deine Anlagestrategie (P2P, Aktien, Cash-Quote) und passt sie an deine Lebenssituation an.",
+  scale: FIVE,
+  dimensions: {
+    TOL: { name: "Risikotoleranz", desc: "Komfort mit Schwankung & Verlustrisiko" },
+    HOR: { name: "Zeithorizont/Geduld", desc: "Bereitschaft, lange investiert zu bleiben" },
+  },
+  items: [
+    { id: 1, text: "Für höhere Rendite nehme ich grössere Schwankungen in Kauf.", dim: "TOL" },
+    { id: 2, text: "Ein Verlust von 20 % in einem Jahr würde mich nicht zum Verkauf treiben.", dim: "TOL" },
+    { id: 3, text: "Ich investiere lieber offensiv als auf dem Sparkonto zu verlieren.", dim: "TOL" },
+    { id: 4, text: "P2P-/Aktienrisiken finde ich vertretbar, wenn die Rendite stimmt.", dim: "TOL" },
+    { id: 5, text: "Bei fallenden Märkten kaufe ich eher nach als zu verkaufen.", dim: "TOL" },
+    { id: 6, text: "Ich kann Geld 10+ Jahre investiert lassen, ohne es zu brauchen.", dim: "HOR" },
+    { id: 7, text: "Kurzfristige Kursverluste beunruhigen mich kaum.", dim: "HOR" },
+    { id: 8, text: "Ich denke bei Geld in Jahrzehnten, nicht in Monaten.", dim: "HOR" },
+    { id: 9, text: "Ich brauche keinen schnellen Zugriff auf meine Anlagen.", dim: "HOR" },
+    { id: 10, text: "Geduld beim Investieren fällt mir leicht.", dim: "HOR" },
+  ],
+  summarize: (s) => {
+    const m = ((s.TOL ?? 0) + (s.HOR ?? 0)) / 2;
+    return m >= 4 ? "hoch (offensiv)" : m >= 2.6 ? "mittel (ausgewogen)" : "tief (defensiv)";
+  },
+};
+
+// --- Selbstwirksamkeit (🟢, GSE-Skala Schwarzer/Jerusalem) ------------------
+const GSE: LikertAssessment = {
+  key: "GSE",
+  title: "Selbstwirksamkeit",
+  evidence: "EVIDENCE",
+  intro: "Dein Vertrauen, schwierige Aufgaben aus eigener Kraft zu meistern. Hohe Selbstwirksamkeit sagt Zielerreichung und Resilienz voraus.",
+  scale: FIVE,
+  dimensions: { GSE: { name: "Allgemeine Selbstwirksamkeit", desc: "Vertrauen in die eigene Handlungsfähigkeit" } },
+  items: [
+    { id: 1, text: "Schwierige Probleme löse ich meist aus eigener Kraft.", dim: "GSE" },
+    { id: 2, text: "Wenn mir jemand Widerstand leistet, finde ich Mittel, mich durchzusetzen.", dim: "GSE" },
+    { id: 3, text: "Es fällt mir leicht, an meinen Absichten festzuhalten.", dim: "GSE" },
+    { id: 4, text: "In unerwarteten Situationen weiss ich, wie ich mich verhalten soll.", dim: "GSE" },
+    { id: 5, text: "Auch bei Überraschungen komme ich gut zurecht.", dim: "GSE" },
+    { id: 6, text: "Schwierigkeiten sehe ich gelassen entgegen, weil ich mir vertraue.", dim: "GSE" },
+    { id: 7, text: "Was auch kommt, ich werde damit klarkommen.", dim: "GSE" },
+    { id: 8, text: "Für jedes Problem finde ich eine Lösung.", dim: "GSE" },
+  ],
+  summarize: (s) => `Selbstwirksamkeit: ${(s.GSE ?? 0).toFixed(1)}/5`,
+};
+
 export const ASSESSMENTS: Record<string, LikertAssessment> = {
   HEXACO,
   VALUES,
   VIA,
   ENNEAGRAM,
   DISC,
+  GRIT,
+  LOC,
+  RISK,
+  GSE,
 };
 
 export const ASSESSMENT_LIST = Object.values(ASSESSMENTS);
