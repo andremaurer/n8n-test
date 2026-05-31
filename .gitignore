@@ -27,3 +27,10 @@ npm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# tauri (native mac app build artifacts)
+/src-tauri/target
+/src-tauri/gen
+/src-tauri/icons/*.png
+/src-tauri/icons/*.icns
+/src-tauri/icons/*.ico
