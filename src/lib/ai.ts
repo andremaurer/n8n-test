@@ -295,3 +295,56 @@ Antworte als striktes JSON: {"items":[{"id","alignment","note","goalId"}]}. Deut
     return { source: "fallback", items };
   }
 }
+
+// --- Weekly review narrative ------------------------------------------------
+import type { WeekReview } from "./weekreview";
+
+export interface WeekReviewAI {
+  source: "ai" | "fallback";
+  summary: string;
+  focus: string[]; // 3 concrete actions for next week
+  warnings: string[];
+}
+
+function weekReviewFallback(r: WeekReview): WeekReviewAI {
+  const warnings = [...r.mismatches];
+  if (r.busyworkOpen > 0) warnings.push(`${r.busyworkOpen} offene Todos sind als Busywork markiert — delegieren, bündeln oder streichen.`);
+  if (r.totalTrackedMin > 0 && r.goalLinkedPct < 30) warnings.push(`Nur ${r.goalLinkedPct}% deiner erfassten Zeit war zielbezogen.`);
+
+  const focus: string[] = [];
+  const neglected = r.goals.filter((g) => g.verdict === "NEGLECTED" || g.verdict === "UNDERINVESTED");
+  if (neglected.length) focus.push(`Blocke nächste Woche feste Zeit für: ${neglected.slice(0, 2).map((g) => `„${g.text}"`).join(", ")}.`);
+  if (r.busyworkOpen > 0) focus.push("Streiche oder delegiere mindestens ein Busywork-Todo.");
+  const topGoal = r.goals.find((g) => g.openTodos > 0);
+  if (topGoal) focus.push(`Erledige das nächste konkrete Todo für „${topGoal.text}".`);
+  while (focus.length < 3) focus.push("Definiere für dein wichtigstes Ziel den kleinsten nächsten Schritt und tracke die Zeit dafür.");
+
+  const summary = r.totalTrackedMin === 0
+    ? "Noch keine Zeitdaten diese Woche. Verbinde deinen Tracker oder importiere den Kalender, dann zeigt der Review, wo deine Stunden vs. deine Ziele stehen."
+    : `Du hast ${Math.round(r.totalTrackedMin / 60)}h erfasst, davon ${r.goalLinkedPct}% zielbezogen. ${r.todosDoneThisWeek} Todos erledigt, ${r.alignedOpen} zielwirksame offen.${r.mismatches.length ? " Es gibt Lücken zwischen Prioritäten und Zeiteinsatz (siehe Warnungen)." : ""}`;
+
+  return { source: "fallback", summary, focus: focus.slice(0, 3), warnings };
+}
+
+export async function reviewWeek(r: WeekReview): Promise<WeekReviewAI> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return weekReviewFallback(r);
+  try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey });
+    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+    const prompt = `Du bist ein Produktivitäts-/Strategie-Coach mit Fokus auf finanzielle Freiheit.
+Wochendaten (JSON):
+${JSON.stringify(r, null, 2)}
+
+Schreibe ein ehrliches, knappes Wochenreview auf Deutsch. Decke Lücken zwischen erklärten
+Prioritäten (Ziele) und tatsächlichem Zeiteinsatz auf. Antworte als striktes JSON:
+{"summary": "...", "focus": ["3 konkrete Aktionen für nächste Woche"], "warnings": ["..."]}.`;
+    const msg = await client.messages.create({ model, max_tokens: 900, messages: [{ role: "user", content: prompt }] });
+    const text = msg.content.filter((c) => c.type === "text").map((c: any) => c.text).join("");
+    const parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+    return { source: "ai", summary: parsed.summary ?? "", focus: parsed.focus ?? [], warnings: parsed.warnings ?? [] };
+  } catch {
+    return weekReviewFallback(r);
+  }
+}
