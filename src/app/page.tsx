@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getSelfProfile } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { Card, Stat, Bar, CardLink, Empty, EvidenceBadge } from "@/components/ui";
-import { addGoal, toggleGoal } from "@/lib/actions";
+import { addGoal, toggleGoal, goalToHabit } from "@/lib/actions";
 import { LIFE_PATH_MEANINGS } from "@/lib/numerology";
 import { currentTransits } from "@/lib/astrology";
 
@@ -133,10 +133,18 @@ export default async function Dashboard() {
                   <span className="chip mr-2 text-slate-400">{horizonLabel(g.horizon)}</span>
                   {g.text}
                 </span>
-                <form action={toggleGoal}>
-                  <input type="hidden" name="id" value={g.id} />
-                  <button className="btn-ghost text-xs">{g.status === "DONE" ? "↺" : "✓ erledigt"}</button>
-                </form>
+                <div className="flex gap-1">
+                  {g.status !== "DONE" && (
+                    <form action={goalToHabit}>
+                      <input type="hidden" name="id" value={g.id} />
+                      <button className="btn-ghost text-xs" title="In tägliche Gewohnheit umwandeln">→ Gewohnheit</button>
+                    </form>
+                  )}
+                  <form action={toggleGoal}>
+                    <input type="hidden" name="id" value={g.id} />
+                    <button className="btn-ghost text-xs">{g.status === "DONE" ? "↺" : "✓ erledigt"}</button>
+                  </form>
+                </div>
               </li>
             ))}
           </ul>

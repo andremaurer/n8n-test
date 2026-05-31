@@ -71,3 +71,24 @@ export function computeFire(i: FireInputs): FireResult {
     alreadyFree,
   };
 }
+
+// FIRE variants — different definitions of "enough".
+export interface FireVariants {
+  lean: number;
+  full: number;
+  fat: number;
+  coast: number;
+  barista: number;
+}
+
+export function computeFireVariants(
+  annualSpend: number,
+  withdrawalRate: number,
+  expectedReturn: number,
+  yearsToTargetAge: number
+): FireVariants {
+  const full = withdrawalRate > 0 ? annualSpend / withdrawalRate : Infinity;
+  const years = Math.max(0, yearsToTargetAge);
+  const coast = full / Math.pow(1 + expectedReturn, years);
+  return { lean: full * 0.7, full, fat: full * 1.75, coast, barista: full * 0.5 };
+}

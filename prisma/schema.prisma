@@ -36,6 +36,70 @@ model Person {
   finance           FinanceProfile?
   memberships       ConstellationMember[]
   businessIdeas     BusinessIdea[]
+  wheelCheckins     WheelCheckin[]
+  decisions         Decision[]
+  skills            Skill[]
+  ikigai            Ikigai?
+}
+
+// Wheel of Life — 8 life areas scored 1-10, recurring check-in.
+model WheelCheckin {
+  id            String   @id @default(cuid())
+  personId      String
+  person        Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  date          String
+  career        Int      @default(5)
+  finance       Int      @default(5)
+  health        Int      @default(5)
+  relationships Int      @default(5)
+  family        Int      @default(5)
+  growth        Int      @default(5)
+  fun           Int      @default(5)
+  spirituality  Int      @default(5)
+  createdAt     DateTime @default(now())
+
+  @@index([personId])
+}
+
+// Decision assistant — weighted pro/con snapshot.
+model Decision {
+  id        String   @id @default(cuid())
+  personId  String
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  title     String
+  optionA   String   @default("Option A")
+  optionB   String   @default("Option B")
+  factors   String   @default("[]")
+  decision  String?
+  createdAt DateTime @default(now())
+
+  @@index([personId])
+}
+
+// Skill inventory → monetization matrix.
+model Skill {
+  id           String   @id @default(cuid())
+  personId     String
+  person       Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  name         String
+  proficiency  Int      @default(3)
+  enjoyment    Int      @default(3)
+  marketDemand Int      @default(3)
+  createdAt    DateTime @default(now())
+
+  @@index([personId])
+}
+
+// Ikigai — four overlapping circles (one per person).
+model Ikigai {
+  id         String   @id @default(cuid())
+  personId   String   @unique
+  person     Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  love       String   @default("")
+  goodAt     String   @default("")
+  paidFor    String   @default("")
+  worldNeeds String   @default("")
+  updatedAt  DateTime @updatedAt
 }
 
 // Result of a psychometric questionnaire (Big Five, RIASEC, Enneagram, ...).
@@ -135,6 +199,9 @@ model FinanceProfile {
   withdrawalRate       Float  @default(0.04) // 4% rule
   expectedReturn       Float  @default(0.05) // real annual return
   targetMonthlySpend   Float  @default(0)    // desired spend in freedom (0 = use expenses)
+  pillar2              Float  @default(0)    // CH: Pensionskasse balance
+  pillar3a             Float  @default(0)    // CH: Säule 3a balance
+  wealthTaxRate        Float  @default(0.005) // CH: cantonal wealth tax (approx)
   updatedAt            DateTime @updatedAt
 }
 

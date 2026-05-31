@@ -1,8 +1,8 @@
 import { getSelf } from "@/lib/queries";
 import { prisma } from "@/lib/db";
-import { computeFire } from "@/lib/fire";
+import { computeFire, computeFireVariants } from "@/lib/fire";
 import { Card, Stat, Bar, Empty } from "@/components/ui";
-import { saveFinance } from "@/lib/actions";
+import { saveFinance, importExpensesCsv } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +41,13 @@ export default async function FinancePage() {
       : null;
   const incomeUp = scen({ income: 1.1 });
   const spendDown = scen({ expenses: 0.9 });
+
+  // FIRE variants (target age 60) + CH wealth tax estimate.
+  const birthYear = self.birthDate ? Number(self.birthDate.slice(0, 4)) : null;
+  const age = birthYear ? new Date().getFullYear() - birthYear : 40;
+  const variants = f ? computeFireVariants(f.annualSpend, finance!.withdrawalRate, finance!.expectedReturn, Math.max(0, 60 - age)) : null;
+  const totalWealth = finance ? finance.netWorth + finance.pillar2 + finance.pillar3a : 0;
+  const wealthTax = finance ? Math.round(finance.netWorth * finance.wealthTaxRate) : 0;
 
   return (
     <div className="space-y-6">
@@ -97,6 +104,9 @@ export default async function FinancePage() {
           </div>
           <Field name="withdrawalRatePct" label="Entnahmerate %" def={finance ? finance.withdrawalRate * 100 : 4} hint="4 % = klassische FIRE-Regel" />
           <Field name="expectedReturnPct" label="Erwartete Rendite % (real)" def={finance ? finance.expectedReturn * 100 : 5} />
+          <Field name="pillar2" label="Säule 2 / Pensionskasse (CH)" def={finance?.pillar2} />
+          <Field name="pillar3a" label="Säule 3a Guthaben (CH)" def={finance?.pillar3a} />
+          <Field name="wealthTaxRatePct" label="Vermögenssteuer % (CH, ca.)" def={finance ? finance.wealthTaxRate * 100 : 0.5} hint="kantonal verschieden, grobe Schätzung" />
           <div className="sm:col-span-3"><button className="btn">Speichern & berechnen</button></div>
         </form>
         <p className="mt-3 text-xs text-slate-500">

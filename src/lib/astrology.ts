@@ -179,3 +179,60 @@ export function currentTransits(date = new Date()): PlanetPosition[] {
     };
   });
 }
+
+// --- Aspects ----------------------------------------------------------------
+export interface AspectDef { name: string; angle: number; orb: number; glyph: string }
+export const ASPECTS: AspectDef[] = [
+  { name: "Konjunktion", angle: 0, orb: 8, glyph: "☌" },
+  { name: "Sextil", angle: 60, orb: 4, glyph: "⚹" },
+  { name: "Quadrat", angle: 90, orb: 6, glyph: "□" },
+  { name: "Trigon", angle: 120, orb: 6, glyph: "△" },
+  { name: "Opposition", angle: 180, orb: 8, glyph: "☍" },
+];
+
+export interface Aspect { a: string; b: string; type: string; glyph: string; orb: number; harmonic: "harmonisch" | "spannend" | "neutral" }
+
+function aspectAngleDiff(a: number, b: number): number {
+  let d = Math.abs(a - b) % 360;
+  if (d > 180) d = 360 - d;
+  return d;
+}
+
+export function computeAspects(planets: PlanetPosition[]): Aspect[] {
+  const out: Aspect[] = [];
+  for (let i = 0; i < planets.length; i++)
+    for (let j = i + 1; j < planets.length; j++) {
+      const d = aspectAngleDiff(planets[i].longitude, planets[j].longitude);
+      for (const asp of ASPECTS) {
+        if (Math.abs(d - asp.angle) <= asp.orb) {
+          out.push({
+            a: planets[i].name,
+            b: planets[j].name,
+            type: asp.name,
+            glyph: asp.glyph,
+            orb: Math.round(Math.abs(d - asp.angle) * 10) / 10,
+            harmonic: asp.name === "Trigon" || asp.name === "Sextil" ? "harmonisch" : asp.name === "Quadrat" || asp.name === "Opposition" ? "spannend" : "neutral",
+          });
+          break;
+        }
+      }
+    }
+  return out.sort((x, y) => x.orb - y.orb);
+}
+
+export interface TransitHit { transit: string; aspect: string; glyph: string; natal: string; orb: number }
+export function transitsToNatal(natal: PlanetPosition[], date = new Date(), maxOrb = 2): TransitHit[] {
+  const tr = currentTransits(date);
+  const out: TransitHit[] = [];
+  for (const t of tr)
+    for (const n of natal) {
+      const d = aspectAngleDiff(t.longitude, n.longitude);
+      for (const asp of ASPECTS) {
+        if (Math.abs(d - asp.angle) <= Math.min(maxOrb, asp.orb)) {
+          out.push({ transit: t.name, aspect: asp.name, glyph: asp.glyph, natal: n.name, orb: Math.round(Math.abs(d - asp.angle) * 10) / 10 });
+          break;
+        }
+      }
+    }
+  return out.sort((x, y) => x.orb - y.orb);
+}

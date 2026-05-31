@@ -10,7 +10,11 @@ const LINKS = [
   { href: "/business", label: "Geschäftsfelder", emoji: "🚀" },
   { href: "/constellations", label: "Konstellationen", emoji: "🕸️" },
   { href: "/freedom", label: "Praxis & Journal", emoji: "🌱" },
+  { href: "/phases", label: "Lebensphasen", emoji: "🗺️" },
   { href: "/synthesis", label: "KI-Synthese", emoji: "✨" },
+  { href: "/chat", label: "Frag dein Profil", emoji: "💬" },
+  { href: "/decisions", label: "Entscheide", emoji: "⚖️" },
+  { href: "/data", label: "Daten", emoji: "💾" },
 ];
 
 export function Nav() {

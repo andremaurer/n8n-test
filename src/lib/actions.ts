@@ -1,7 +1,18 @@
 "use server";
 
+"use server";
+
 import { prisma } from "./db";
 import { revalidatePath } from "next/cache";
+import { askProfile, type AskResult } from "./ai";
+import { getSelfSynthesisInput } from "./queries";
+
+// Chat: ask a question against your own profile + knowledge base.
+export async function askMyProfile(question: string): Promise<AskResult> {
+  const input = await getSelfSynthesisInput();
+  if (!input) return { source: "fallback", answer: "Kein Profil vorhanden.", sources: [] };
+  return askProfile(question, input as any);
+}
 
 // ---- People ----------------------------------------------------------------
 export async function createPerson(formData: FormData) {
@@ -66,6 +77,9 @@ export async function saveFinance(formData: FormData) {
     withdrawalRate: (num(formData.get("withdrawalRatePct")) ?? 4) / 100,
     expectedReturn: (num(formData.get("expectedReturnPct")) ?? 5) / 100,
     targetMonthlySpend: num(formData.get("targetMonthlySpend")) ?? 0,
+    pillar2: num(formData.get("pillar2")) ?? 0,
+    pillar3a: num(formData.get("pillar3a")) ?? 0,
+    wealthTaxRate: (num(formData.get("wealthTaxRatePct")) ?? 0.5) / 100,
   };
   await prisma.financeProfile.upsert({
     where: { personId },
@@ -109,6 +123,227 @@ export async function saveAssessment(personId: string, type: string, answers: Re
   });
   revalidatePath(`/people/${personId}`);
   revalidatePath("/");
+}
+
+// ---- Wheel of Life ---------------------------------------------------------
+export async function addWheelCheckin(formData: FormData) {
+  const personId = String(formData.get("personId"));
+  await prisma.wheelCheckin.create({
+    data: {
+      personId,
+      date: new Date().toISOString().slice(0, 10),
+      career: int(formData.get("career")),
+      finance: int(formData.get("finance")),
+      health: int(formData.get("health")),
+      relationships: int(formData.get("relationships")),
+      family: int(formData.get("family")),
+      growth: int(formData.get("growth")),
+      fun: int(formData.get("fun")),
+      spirituality: int(formData.get("spirituality")),
+    },
+  });
+  revalidatePath("/freedom");
+  revalidatePath("/");
+}
+
+// ---- Decision assistant ----------------------------------------------------
+export async function saveDecision(personId: string, payload: unknown) {
+  const p = payload as { title: string; optionA: string; optionB: string; factors: unknown; decision?: string };
+  await prisma.decision.create({
+    data: {
+      personId,
+      title: p.title || "Entscheidung",
+      optionA: p.optionA || "Option A",
+      optionB: p.optionB || "Option B",
+      factors: JSON.stringify(p.factors ?? []),
+      decision: p.decision ?? null,
+    },
+  });
+  revalidatePath("/decisions");
+}
+
+export async function deleteDecision(formData: FormData) {
+  await prisma.decision.delete({ where: { id: String(formData.get("id")) } });
+  revalidatePath("/decisions");
+}
+
+// ---- Skills & Ikigai -------------------------------------------------------
+export async function addSkill(formData: FormData) {
+  const personId = String(formData.get("personId"));
+  await prisma.skill.create({
+    data: {
+      personId,
+      name: String(formData.get("name") || "Skill"),
+      proficiency: int(formData.get("proficiency")),
+      enjoyment: int(formData.get("enjoyment")),
+      marketDemand: int(formData.get("marketDemand")),
+    },
+  });
+  revalidatePath("/business");
+}
+
+export async function deleteSkill(formData: FormData) {
+  await prisma.skill.delete({ where: { id: String(formData.get("id")) } });
+  revalidatePath("/business");
+}
+
+export async function saveIkigai(formData: FormData) {
+  const personId = String(formData.get("personId"));
+  const data = {
+    love: String(formData.get("love") || ""),
+    goodAt: String(formData.get("goodAt") || ""),
+    paidFor: String(formData.get("paidFor") || ""),
+    worldNeeds: String(formData.get("worldNeeds") || ""),
+  };
+  await prisma.ikigai.upsert({ where: { personId }, update: data, create: { personId, ...data } });
+  revalidatePath("/business");
+}
+
+// ---- CSV expense import ----------------------------------------------------
+export async function importExpensesCsv(formData: FormData) {
+  const personId = String(formData.get("personId"));
+  const file = formData.get("file");
+  if (!file || typeof file === "string") return;
+  const text = await (file as File).text();
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  let total = 0;
+  let count = 0;
+  const months = new Set<string>();
+  for (const line of lines) {
+    const cols = line.split(/[,;\t]/);
+    let amount: number | null = null;
+    let monthKey: string | null = null;
+    for (const c of cols) {
+      const t = c.trim().replace(/["']/g, "");
+      const n = Number(t.replace(/[^0-9.,-]/g, "").replace(",", "."));
+      if (amount === null && t && !isNaN(n) && Math.abs(n) > 0 && /\d/.test(t) && !/^\d{4}-\d{2}/.test(t)) amount = Math.abs(n);
+      const m1 = t.match(/(\d{4})-(\d{2})/);
+      const m2 = t.match(/\d{2}\.(\d{2})\.(\d{4})/);
+      if (m1) monthKey = `${m1[1]}-${m1[2]}`;
+      else if (m2) monthKey = `${m2[2]}-${m2[1]}`;
+    }
+    if (amount !== null) {
+      total += amount;
+      count++;
+      if (monthKey) months.add(monthKey);
+    }
+  }
+  if (count === 0) return;
+  const monthlyExpenses = Math.round(total / Math.max(1, months.size));
+  await prisma.financeProfile.upsert({
+    where: { personId },
+    update: { monthlyExpenses },
+    create: { personId, monthlyExpenses },
+  });
+  revalidatePath("/finance");
+}
+
+// ---- Life phases -----------------------------------------------------------
+export async function addLifePhase(formData: FormData) {
+  const personId = String(formData.get("personId"));
+  const priorities = String(formData.get("priorities") || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  await prisma.lifePhase.create({
+    data: {
+      personId,
+      title: String(formData.get("title") || "Phase"),
+      area: String(formData.get("area") || "GENERAL"),
+      startDate: str(formData.get("startDate")),
+      endDate: str(formData.get("endDate")),
+      status: String(formData.get("status") || "ACTIVE"),
+      priorities: JSON.stringify(priorities),
+      notes: str(formData.get("notes")),
+    },
+  });
+  revalidatePath("/phases");
+}
+
+export async function setLifePhaseStatus(formData: FormData) {
+  await prisma.lifePhase.update({
+    where: { id: String(formData.get("id")) },
+    data: { status: String(formData.get("status")) },
+  });
+  revalidatePath("/phases");
+}
+
+export async function deleteLifePhase(formData: FormData) {
+  await prisma.lifePhase.delete({ where: { id: String(formData.get("id")) } });
+  revalidatePath("/phases");
+}
+
+export async function goalToHabit(formData: FormData) {
+  const goalId = String(formData.get("id"));
+  const goal = await prisma.goal.findUnique({ where: { id: goalId } });
+  if (!goal) return;
+  const cat = ({ FINANCE: "FINANCE", HEALTH: "HEALTH", GROWTH: "GROWTH" } as Record<string, string>)[goal.area] || "MINDSET";
+  await prisma.habit.create({
+    data: { personId: goal.personId, title: `Schritt zu: ${goal.text}`, category: cat, cadence: "DAILY" },
+  });
+  await prisma.goal.update({ where: { id: goalId }, data: { status: "IN_PROGRESS" } });
+  revalidatePath("/freedom");
+  revalidatePath("/");
+}
+
+// ---- Data import / restore -------------------------------------------------
+export async function importData(formData: FormData) {
+  const file = formData.get("file");
+  if (!file || typeof file === "string") return;
+  let text = await (file as File).text();
+  const password = String(formData.get("password") || "");
+  let dump: any;
+  try {
+    dump = JSON.parse(text);
+    if (dump && dump._enc === "aes-256-gcm") {
+      if (!password) return;
+      const { decryptJson } = await import("./crypto");
+      dump = JSON.parse(decryptJson(text, password));
+    }
+  } catch {
+    return;
+  }
+  if (!dump || dump._meta?.app !== "life-optimization-planner") return;
+
+  await prisma.$transaction([
+    prisma.habitLog.deleteMany(),
+    prisma.habit.deleteMany(),
+    prisma.assessmentResult.deleteMany(),
+    prisma.goal.deleteMany(),
+    prisma.lifePhase.deleteMany(),
+    prisma.journalEntry.deleteMany(),
+    prisma.wheelCheckin.deleteMany(),
+    prisma.decision.deleteMany(),
+    prisma.skill.deleteMany(),
+    prisma.ikigai.deleteMany(),
+    prisma.businessIdea.deleteMany(),
+    prisma.constellationMember.deleteMany(),
+    prisma.constellation.deleteMany(),
+    prisma.financeProfile.deleteMany(),
+    prisma.appSettings.deleteMany(),
+    prisma.person.deleteMany(),
+  ]);
+
+  const d = (k: string) => (Array.isArray(dump[k]) ? dump[k] : []);
+  if (d("people").length) await prisma.person.createMany({ data: d("people") });
+  if (d("finance").length) await prisma.financeProfile.createMany({ data: d("finance") });
+  if (d("assessments").length) await prisma.assessmentResult.createMany({ data: d("assessments") });
+  if (d("goals").length) await prisma.goal.createMany({ data: d("goals") });
+  if (d("lifePhases").length) await prisma.lifePhase.createMany({ data: d("lifePhases") });
+  if (d("journal").length) await prisma.journalEntry.createMany({ data: d("journal") });
+  if (d("habits").length) await prisma.habit.createMany({ data: d("habits") });
+  if (d("habitLogs").length) await prisma.habitLog.createMany({ data: d("habitLogs") });
+  if (d("business").length) await prisma.businessIdea.createMany({ data: d("business") });
+  if (d("constellations").length) await prisma.constellation.createMany({ data: d("constellations") });
+  if (d("members").length) await prisma.constellationMember.createMany({ data: d("members") });
+  if (d("wheel").length) await prisma.wheelCheckin.createMany({ data: d("wheel") });
+  if (d("decisions").length) await prisma.decision.createMany({ data: d("decisions") });
+  if (d("skills").length) await prisma.skill.createMany({ data: d("skills") });
+  if (d("ikigai").length) await prisma.ikigai.createMany({ data: d("ikigai") });
+  if (d("settings").length) await prisma.appSettings.createMany({ data: d("settings") });
+
+  revalidatePath("/");
+  revalidatePath("/data");
 }
 
 // ---- Business ideas --------------------------------------------------------

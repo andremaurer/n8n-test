@@ -1,11 +1,22 @@
 import { getSelf } from "@/lib/queries";
 import { prisma } from "@/lib/db";
-import { Card, Empty, EvidenceBadge } from "@/components/ui";
-import { addHabit, toggleHabitToday, addJournal } from "@/lib/actions";
+import { Card, Empty, EvidenceBadge, Bar } from "@/components/ui";
+import { addHabit, toggleHabitToday, addJournal, addWheelCheckin } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
 const CAT_LABEL: Record<string, string> = { MINDSET: "Mindset", FINANCE: "Finanzen", HEALTH: "Gesundheit", GROWTH: "Wachstum" };
+
+const WHEEL_AREAS: { key: string; label: string }[] = [
+  { key: "career", label: "Beruf/Berufung" },
+  { key: "finance", label: "Finanzen" },
+  { key: "health", label: "Gesundheit" },
+  { key: "relationships", label: "Beziehungen" },
+  { key: "family", label: "Familie" },
+  { key: "growth", label: "Wachstum" },
+  { key: "fun", label: "Freude/Spass" },
+  { key: "spirituality", label: "Sinn/Spiritualität" },
+];
 
 export default async function FreedomPage() {
   const self = await getSelf();
@@ -21,6 +32,10 @@ export default async function FreedomPage() {
     }),
     prisma.journalEntry.findMany({ where: { personId: self.id }, orderBy: { date: "desc" }, take: 14 }),
   ]);
+  const lastWheel = await prisma.wheelCheckin.findFirst({ where: { personId: self.id }, orderBy: { createdAt: "desc" } });
+  const wheelAvg = lastWheel
+    ? Math.round((WHEEL_AREAS.reduce((s, a) => s + (lastWheel as any)[a.key], 0) / WHEEL_AREAS.length) * 10) / 10
+    : null;
 
   return (
     <div className="space-y-6">
@@ -63,6 +78,37 @@ export default async function FreedomPage() {
             })}
           </ul>
         )}
+      </Card>
+
+      <Card title="Wheel of Life" level="HEURISTIC" action={wheelAvg !== null ? <span className="chip text-slate-300">Balance Ø {wheelAvg}/10</span> : undefined}>
+        {lastWheel && (
+          <div className="mb-4 space-y-1.5">
+            {WHEEL_AREAS.map((a) => {
+              const v = (lastWheel as any)[a.key] as number;
+              return (
+                <div key={a.key}>
+                  <div className="mb-0.5 flex justify-between text-xs"><span className="text-slate-200">{a.label}</span><span className="text-slate-500">{v}/10</span></div>
+                  <Bar value={v * 10} color={v >= 7 ? "#34d399" : v >= 4 ? "#7c6cf6" : "#f59e0b"} />
+                </div>
+              );
+            })}
+            <div className="pt-1 text-xs text-slate-500">Letzter Check-in: {lastWheel.date}</div>
+          </div>
+        )}
+        <form action={addWheelCheckin} className="space-y-3">
+          <input type="hidden" name="personId" value={self.id} />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {WHEEL_AREAS.map((a) => (
+              <div key={a.key}>
+                <label className="label">{a.label}</label>
+                <select name={a.key} className="input" defaultValue={lastWheel ? String((lastWheel as any)[a.key]) : "5"}>
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+          <button className="btn">Check-in speichern</button>
+        </form>
       </Card>
 
       <Card title="Journal & Check-in" action={<EvidenceBadge level="HEURISTIC" />}>

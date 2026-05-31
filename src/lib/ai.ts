@@ -4,6 +4,7 @@
 // so the app always works.
 
 import type { BigFiveScores } from "./assessments";
+import { retrieve, Snippet } from "./knowledge";
 
 export interface SynthesisProfile {
   name: string;
@@ -30,9 +31,30 @@ export interface SynthesisResult {
   businessDirections: string[];
   nextSteps: string[];
   contradictions: string[];
+  sources: { title: string; source: string; system: string }[];
+}
+
+function profileQuery(p: SynthesisProfile): string {
+  const parts: string[] = ["freiheit wohlstand geschäft entscheidung"];
+  if (p.bigFive) {
+    if (p.bigFive.C <= 2.5) parts.push("gewissenhaftigkeit disziplin umsetzung");
+    if (p.bigFive.O >= 3.5) parts.push("offenheit kreativität innovation");
+    if (p.bigFive.N >= 3.5) parts.push("neurotizismus stress entscheidung");
+  }
+  if (p.fire) parts.push("fire sparquote kapital entnahme passiv");
+  if (p.hd) parts.push("human design typ autorität");
+  if (p.astro) parts.push("astrologie transit");
+  return parts.join(" ");
+}
+
+function snippetCitations(snips: Snippet[]) {
+  return snips.map((s) => ({ title: s.title, source: s.source, system: s.system }));
 }
 
 const SYSTEM_PROMPT = `Du bist der „Integrator" einer persönlichen Lebens-Optimierungs-App.
+Du vereinst die Sicht mehrerer Experten-Personas: Persönlichkeitspsychologe (Big Five/HEXACO, 🟢),
+Finanzplaner (FIRE, 🟢), Verhaltensökonom (Biases, 🟢), Karriere-/Geschäftsfeld-Coach (RIASEC/Ikigai, 🟡)
+und Reflexions-Begleiter für Deutungssysteme (🔵).
 Du führst Befunde aus mehreren Systemen zusammen: Big Five (🟢 evidenzbasiert),
 Astrologie & Human Design & Numerologie (🔵 Deutungssysteme), sowie Finanzkennzahlen (🟢).
 
@@ -90,7 +112,8 @@ function fallbackSynthesis(p: SynthesisProfile): SynthesisResult {
 
   const summary = `${p.name}: Auswertung aus ${[p.bigFive && "Big Five", p.astro && "Astrologie", p.hd && "Human Design", p.numerology && "Numerologie", p.fire && "Finanzen"].filter(Boolean).join(", ") || "noch wenig Daten"}. Evidenzbasierte Befunde sind höher gewichtet als Deutungssysteme. Fokus: konkrete nächste Schritte Richtung Freiheit.`;
 
-  return { source: "fallback", summary, strengths, watchouts, businessDirections, nextSteps, contradictions };
+  const snips = retrieve(profileQuery(p), 5);
+  return { source: "fallback", summary, strengths, watchouts, businessDirections, nextSteps, contradictions, sources: snippetCitations(snips) };
 }
 
 export async function synthesize(p: SynthesisProfile): Promise<SynthesisResult> {
@@ -101,6 +124,8 @@ export async function synthesize(p: SynthesisProfile): Promise<SynthesisResult> 
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey });
     const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+    const snips = retrieve(profileQuery(p), 5);
+    const knowledge = snips.map((s) => `- [${s.system} · ${s.evidence}] ${s.title}: ${s.text} (Quelle: ${s.source})`).join("\n");
     const msg = await client.messages.create({
       model,
       max_tokens: 1500,
@@ -109,7 +134,7 @@ export async function synthesize(p: SynthesisProfile): Promise<SynthesisResult> 
         { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
       ] as any,
       messages: [
-        { role: "user", content: `Profil als JSON:\n${JSON.stringify(p, null, 2)}\n\nGib NUR das JSON-Objekt zurück.` },
+        { role: "user", content: `Experten-Wissensbasis (zitiere relevante Punkte):\n${knowledge}\n\nProfil als JSON:\n${JSON.stringify(p, null, 2)}\n\nGib NUR das JSON-Objekt zurück.` },
       ],
     });
     const text = msg.content.filter((c) => c.type === "text").map((c: any) => c.text).join("");
@@ -124,6 +149,7 @@ export async function synthesize(p: SynthesisProfile): Promise<SynthesisResult> 
       businessDirections: parsed.businessDirections ?? [],
       nextSteps: parsed.nextSteps ?? [],
       contradictions: parsed.contradictions ?? [],
+      sources: snippetCitations(snips),
     };
   } catch (e) {
     const fb = fallbackSynthesis(p);
@@ -133,3 +159,49 @@ export async function synthesize(p: SynthesisProfile): Promise<SynthesisResult> 
 }
 
 export { fallbackSynthesis };
+
+// --- "Ask your profile" chat ------------------------------------------------
+export interface AskResult {
+  source: "ai" | "fallback";
+  answer: string;
+  sources: { title: string; source: string; system: string }[];
+}
+
+export async function askProfile(question: string, p: SynthesisProfile): Promise<AskResult> {
+  const snips = retrieve(question + " " + profileQuery(p), 5);
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+
+  if (!apiKey) {
+    const facts: string[] = [];
+    if (p.bigFive) facts.push(`Big Five: O ${p.bigFive.O}, C ${p.bigFive.C}, E ${p.bigFive.E}, A ${p.bigFive.A}, N ${p.bigFive.N}`);
+    if (p.fire) facts.push(`Finanzen: Sparquote ${Math.round(p.fire.savingsRate * 100)}%, Fortschritt ${Math.round(p.fire.progress * 100)}%, ~${p.fire.yearsToFreedom ?? "?"} Jahre`);
+    if (p.hd) facts.push(`Human Design (🔵): ${p.hd.type}, ${p.hd.authority}`);
+    const body = snips.length
+      ? snips.map((s) => `• ${s.title} (${s.system}, ${s.evidence}): ${s.text}`).join("\n")
+      : "Für diese Frage habe ich keine passende Wissensgrundlage gefunden.";
+    return {
+      source: "fallback",
+      answer: `(Ohne KI-Key — regelbasierte Antwort)\n\nZu „${question}":\n\nRelevantes Expertenwissen:\n${body}\n\nDeine relevanten Daten:\n${facts.join("\n") || "— noch wenig erfasst —"}\n\nTipp: Setze ANTHROPIC_API_KEY für eine vollwertige, dialogische Antwort.`,
+      sources: snippetCitations(snips),
+    };
+  }
+
+  try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey });
+    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+    const knowledge = snips.map((s) => `- [${s.system} · ${s.evidence}] ${s.title}: ${s.text} (Quelle: ${s.source})`).join("\n");
+    const msg = await client.messages.create({
+      model,
+      max_tokens: 900,
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }] as any,
+      messages: [
+        { role: "user", content: `Wissensbasis:\n${knowledge}\n\nNutzerprofil:\n${JSON.stringify(p)}\n\nFrage: ${question}\n\nAntworte konkret, ehrlich nach Evidenz gewichtet, auf Deutsch.` },
+      ],
+    });
+    const text = msg.content.filter((c) => c.type === "text").map((c: any) => c.text).join("");
+    return { source: "ai", answer: text, sources: snippetCitations(snips) };
+  } catch {
+    return { source: "fallback", answer: "KI aktuell nicht erreichbar. Bitte später erneut versuchen.", sources: snippetCitations(snips) };
+  }
+}

@@ -29,6 +29,8 @@ type Center =
   | "Spleen"
   | "Root";
 
+export type HDCenter = Center;
+
 export const CENTER_LABELS: Record<Center, string> = {
   Head: "Kopf",
   Ajna: "Ajna",
@@ -88,6 +90,7 @@ export interface HumanDesignChart {
   definedChannels: string[];
   personality: Activation[]; // conscious
   design: Activation[]; // unconscious
+  geneKeys: { lifesWork: number; evolution: number; radiance: number; purpose: number };
   note: string;
 }
 
@@ -259,6 +262,21 @@ export function computeHumanDesign(
     definedChannels,
     personality,
     design,
+    geneKeys: {
+      lifesWork: personality[0].gate,
+      evolution: personality[1].gate,
+      radiance: design[0].gate,
+      purpose: design[1].gate,
+    },
     note: "Nordknoten/Südknoten über mittleren Mondknoten berechnet (~1,5° genau).",
   };
+}
+
+// For diagrams: which two centers a defined channel ("a-b") connects.
+export function channelToCenters(ch: string): [Center, Center] | null {
+  const [a, b] = ch.split("-").map(Number);
+  const ca = GATE_TO_CENTER[a];
+  const cb = GATE_TO_CENTER[b];
+  if (!ca || !cb) return null;
+  return [ca, cb];
 }

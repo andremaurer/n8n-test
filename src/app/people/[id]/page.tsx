@@ -8,6 +8,10 @@ import { LIFE_PATH_MEANINGS } from "@/lib/numerology";
 import { BIG_FIVE_FACTORS, describeBigFive, RIASEC_TYPES, RiasecType, hollandCode } from "@/lib/assessments";
 import { CENTER_LABELS } from "@/lib/humandesign";
 import { ASSESSMENT_LIST } from "@/lib/assess-registry";
+import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
+import { PrintButton } from "@/components/PrintButton";
+import { computeAspects, transitsToNatal } from "@/lib/astrology";
+import { BodyGraph } from "@/components/BodyGraph";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +32,17 @@ export default async function PersonPage({ params }: { params: { id: string } })
     try { extra.set(r.type, JSON.parse(r.scores)); } catch {}
   }
 
+  // Big Five history (re-assessment over time).
+  const bfHistory = await prisma.assessmentResult.findMany({
+    where: { personId: person.id, type: "BIG_FIVE" },
+    orderBy: { createdAt: "asc" },
+  });
+  const bfSeries = bfHistory
+    .map((r) => {
+      try { return { date: r.createdAt, s: JSON.parse(r.scores) as Record<string, number> }; } catch { return null; }
+    })
+    .filter(Boolean) as { date: Date; s: Record<string, number> }[];
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -35,7 +50,10 @@ export default async function PersonPage({ params }: { params: { id: string } })
           <Link href="/people" className="text-sm text-slate-400 hover:text-white">← Profile</Link>
           <h1 className="text-3xl font-bold text-white">{person.name}</h1>
         </div>
-        <Link href={`/assessments/${person.id}/bigfive`} className="btn">Big-Five-Test machen</Link>
+        <div className="flex gap-2">
+          <PrintButton />
+          <Link href={`/assessments/${person.id}/bigfive`} className="btn">Big-Five-Test machen</Link>
+        </div>
       </header>
 
       {/* Birth data — editable (backend + frontend) */}
@@ -67,22 +85,12 @@ export default async function PersonPage({ params }: { params: { id: string } })
             <label className="label">Geburtszeit</label>
             <input name="birthTime" type="time" className="input" defaultValue={person.birthTime ?? ""} />
           </div>
-          <div>
-            <label className="label">Zeitzone (IANA)</label>
-            <input name="timezone" className="input" defaultValue={person.timezone ?? "Europe/Zurich"} />
-          </div>
-          <div>
-            <label className="label">Geburtsort</label>
-            <input name="birthPlace" className="input" defaultValue={person.birthPlace ?? ""} placeholder="Ort (für Aszendent)" />
-          </div>
-          <div>
-            <label className="label">Breite (Lat)</label>
-            <input name="birthLat" className="input" defaultValue={person.birthLat ?? ""} placeholder="47.37" />
-          </div>
-          <div>
-            <label className="label">Länge (Lng)</label>
-            <input name="birthLng" className="input" defaultValue={person.birthLng ?? ""} placeholder="8.54" />
-          </div>
+          <PlaceAutocomplete
+            defaultPlace={person.birthPlace ?? ""}
+            defaultLat={person.birthLat}
+            defaultLng={person.birthLng}
+            defaultTimezone={person.timezone ?? "Europe/Zurich"}
+          />
           <div className="sm:col-span-3">
             <label className="label">Notizen</label>
             <textarea name="notes" className="input" rows={2} defaultValue={person.notes ?? ""} />
@@ -119,6 +127,26 @@ export default async function PersonPage({ params }: { params: { id: string } })
               </div>
             ))}
             <p className="text-xs text-slate-500">Skala 1–5 (Mittelwert über 10 Items je Dimension, IPIP-50, Public Domain).</p>
+            {bfSeries.length > 1 && (
+              <div className="mt-2 overflow-x-auto">
+                <div className="mb-1 text-xs uppercase text-slate-400">Verlauf ({bfSeries.length} Messungen)</div>
+                <table className="w-full text-xs">
+                  <thead className="text-left text-slate-500"><tr><th className="py-1 pr-3">Datum</th><th className="pr-3">O</th><th className="pr-3">C</th><th className="pr-3">E</th><th className="pr-3">A</th><th>N</th></tr></thead>
+                  <tbody>
+                    {bfSeries.map((row, i) => (
+                      <tr key={i} className="border-t border-white/5 text-slate-300">
+                        <td className="py-1 pr-3">{row.date.toLocaleDateString("de-CH")}</td>
+                        <td className="pr-3">{row.s.O?.toFixed(1)}</td>
+                        <td className="pr-3">{row.s.C?.toFixed(1)}</td>
+                        <td className="pr-3">{row.s.E?.toFixed(1)}</td>
+                        <td className="pr-3">{row.s.A?.toFixed(1)}</td>
+                        <td>{row.s.N?.toFixed(1)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ) : (
           <Empty>Noch kein Big-Five-Ergebnis — die belastbarste Datenquelle über diese Person.</Empty>
@@ -218,6 +246,38 @@ export default async function PersonPage({ params }: { params: { id: string } })
                 Häuser (Whole-Sign): {astro.houses.map((h) => `${h.house}. ${h.sign}`).join(" · ")}
               </div>
             )}
+            {(() => {
+              const aspects = computeAspects(astro.planets).slice(0, 10);
+              const hits = transitsToNatal(astro.planets);
+              return (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <div className="label">Wichtigste Aspekte</div>
+                    <ul className="space-y-1 text-sm">
+                      {aspects.map((a, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <span style={{ color: a.harmonic === "harmonisch" ? "#34d399" : a.harmonic === "spannend" ? "#f59e0b" : "#cbd5e1" }}>{a.glyph}</span>
+                          <span className="text-slate-300">{a.a} {a.type} {a.b}</span>
+                          <span className="text-slate-500">({a.orb}°)</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="label">Aktuelle Transite zu deinem Geburtsbild</div>
+                    {hits.length ? (
+                      <ul className="space-y-1 text-sm">
+                        {hits.slice(0, 8).map((h, i) => (
+                          <li key={i} className="text-slate-300">{h.transit} {h.glyph} {h.aspect} natal {h.natal} <span className="text-slate-500">({h.orb}°)</span></li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-slate-500">Gerade keine engen Transite (Orbis ≤ 2°).</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         ) : (
           <Empty>Geburtsdatum eingeben, um das Horoskop zu berechnen.</Empty>
@@ -235,6 +295,18 @@ export default async function PersonPage({ params }: { params: { id: string } })
               <Stat label="Signatur" value={hd.signature} sub={`Not-Self: ${hd.notSelf}`} />
             </div>
             <p className="text-sm text-slate-300"><span className="text-slate-400">Strategie:</span> {hd.strategy}</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <BodyGraph defined={hd.definedCenters} channels={hd.definedChannels} />
+              <div>
+                <div className="label">Gene Keys (Prime Gates)</div>
+                <ul className="space-y-1 text-sm text-slate-300">
+                  <li>Lebensaufgabe (Life's Work): <span className="text-white">Gate {hd.geneKeys.lifesWork}</span></li>
+                  <li>Entwicklung (Evolution): <span className="text-white">Gate {hd.geneKeys.evolution}</span></li>
+                  <li>Ausstrahlung (Radiance): <span className="text-white">Gate {hd.geneKeys.radiance}</span></li>
+                  <li>Zweck (Purpose): <span className="text-white">Gate {hd.geneKeys.purpose}</span></li>
+                </ul>
+              </div>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <div className="label">Definierte Zentren</div>

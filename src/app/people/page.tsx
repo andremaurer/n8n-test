@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getAllPeople } from "@/lib/queries";
 import { Card, Empty } from "@/components/ui";
 import { createPerson } from "@/lib/actions";
+import { PlaceAutocomplete } from "@/components/PlaceAutocomplete";
 
 export const dynamic = "force-dynamic";
 
@@ -58,22 +59,7 @@ export default async function PeoplePage() {
             <label className="label">Geburtszeit</label>
             <input name="birthTime" type="time" className="input" />
           </div>
-          <div>
-            <label className="label">Geburtsort</label>
-            <input name="birthPlace" className="input" placeholder="Ort" />
-          </div>
-          <div>
-            <label className="label">Zeitzone</label>
-            <input name="timezone" className="input" defaultValue="Europe/Zurich" />
-          </div>
-          <div>
-            <label className="label">Breite (Lat, optional)</label>
-            <input name="birthLat" className="input" placeholder="47.37" />
-          </div>
-          <div>
-            <label className="label">Länge (Lng, optional)</label>
-            <input name="birthLng" className="input" placeholder="8.54" />
-          </div>
+          <PlaceAutocomplete />
           <div className="sm:col-span-2">
             <button className="btn">Hinzufügen</button>
           </div>

@@ -42,3 +42,24 @@ body {
     @apply block h-full rounded-full;
   }
 }
+
+@media print {
+  nav,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .card {
+    border-color: #ddd !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+  main {
+    max-width: none !important;
+  }
+}
