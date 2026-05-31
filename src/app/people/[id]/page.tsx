@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPersonProfile } from "@/lib/queries";
+import { prisma } from "@/lib/db";
 import { Card, Stat, Bar, Empty, EvidenceBadge } from "@/components/ui";
 import { updatePerson, deletePerson } from "@/lib/actions";
 import { LIFE_PATH_MEANINGS } from "@/lib/numerology";
 import { BIG_FIVE_FACTORS, describeBigFive, RIASEC_TYPES, RiasecType, hollandCode } from "@/lib/assessments";
 import { CENTER_LABELS } from "@/lib/humandesign";
+import { ASSESSMENT_LIST } from "@/lib/assess-registry";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +16,17 @@ export default async function PersonPage({ params }: { params: { id: string } })
   if (!profile) notFound();
   const { person, astro, hd, numerology, bigFive, riasec } = profile;
   const code = riasec ? hollandCode(riasec) : null;
+
+  // Extra registry assessments (HEXACO, Values, VIA, Enneagram, DISC).
+  const extraRows = await prisma.assessmentResult.findMany({
+    where: { personId: person.id, type: { in: ASSESSMENT_LIST.map((a) => a.key) } },
+    orderBy: { createdAt: "desc" },
+  });
+  const extra = new Map<string, Record<string, number>>();
+  for (const r of extraRows) {
+    if (extra.has(r.type)) continue;
+    try { extra.set(r.type, JSON.parse(r.scores)); } catch {}
+  }
 
   return (
     <div className="space-y-6">
@@ -133,6 +146,45 @@ export default async function PersonPage({ params }: { params: { id: string } })
         ) : (
           <Empty>Noch kein Interessen-Profil — der direkteste Input für passende Geschäftsfelder.</Empty>
         )}
+      </Card>
+
+      {/* Further assessments (generic registry) */}
+      <Card title="Weitere Profile" action={<span className="text-xs text-slate-400">HEXACO · Werte · Stärken · Enneagramm · DISG</span>}>
+        <div className="space-y-5">
+          {ASSESSMENT_LIST.map((a) => {
+            const scores = extra.get(a.key);
+            const dims = Object.keys(a.dimensions);
+            const ranked = scores ? dims.slice().sort((x, y) => scores[y] - scores[x]) : dims;
+            return (
+              <div key={a.key} className="border-t border-white/5 pt-4 first:border-0 first:pt-0">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-white">{a.title}</span>
+                    <EvidenceBadge level={a.evidence} />
+                  </div>
+                  <Link href={`/assessments/${person.id}/q/${a.key.toLowerCase()}`} className="btn-ghost text-xs">
+                    {scores ? "Erneut testen" : "Test machen"}
+                  </Link>
+                </div>
+                {scores ? (
+                  <div className="space-y-1.5">
+                    {ranked.map((d) => (
+                      <div key={d}>
+                        <div className="mb-0.5 flex justify-between text-xs">
+                          <span className="text-slate-200">{a.dimensions[d].name}</span>
+                          <span className="text-slate-500">{scores[d].toFixed(1)}</span>
+                        </div>
+                        <Bar value={((scores[d] - 1) / 4) * 100} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">{a.intro}</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </Card>
 
       {/* Astrology */}
