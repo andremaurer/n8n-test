@@ -40,6 +40,8 @@ model Person {
   decisions         Decision[]
   skills            Skill[]
   ikigai            Ikigai?
+  accounts          Account[]
+  revenueStreams    RevenueStream[]
 }
 
 // Wheel of Life — 8 life areas scored 1-10, recurring check-in.
@@ -100,6 +102,46 @@ model Ikigai {
   paidFor    String   @default("")
   worldNeeds String   @default("")
   updatedAt  DateTime @updatedAt
+}
+
+// A financial account / position. Multiple per person; summed into net worth.
+// Covers bank accounts, P2P lending (Debitum, Mintos), pillar 3a / pension, etc.
+model Account {
+  id          String   @id @default(cuid())
+  personId    String
+  person      Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  name        String
+  institution String?  // e.g. "Mintos", "ZKB", "VIAC 3a"
+  kind        String   @default("BANK") // BANK | CASH | P2P | PILLAR3A | PILLAR2 | INVEST | CRYPTO | DEBT | OTHER
+  currency    String   @default("CHF")
+  balance     Float    @default(0)
+  // Optional yield assumption for projections (annual, e.g. 0.11 for Mintos).
+  expectedYield Float  @default(0)
+  // Liquidity: can this be drawn on before retirement?
+  liquid      Boolean  @default(true)
+  notes       String?
+  sortOrder   Int      @default(0)
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@index([personId])
+}
+
+// An income stream (active or passive). Drives the path to 15-20k CHF/month.
+model RevenueStream {
+  id            String   @id @default(cuid())
+  personId      String
+  person        Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  name          String   // "Foto/Video Aufträge", "AI-Implementierung Retainer", ...
+  kind          String   @default("ACTIVE") // ACTIVE | PASSIVE | PORTFOLIO
+  monthlyNow    Float    @default(0) // current CHF/month
+  monthlyTarget Float    @default(0) // target CHF/month
+  status        String   @default("BUILDING") // IDEA | BUILDING | LIVE | SCALING
+  notes         String?
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  @@index([personId])
 }
 
 // Result of a psychometric questionnaire (Big Five, RIASEC, Enneagram, ...).
@@ -202,6 +244,12 @@ model FinanceProfile {
   pillar2              Float  @default(0)    // CH: Pensionskasse balance
   pillar3a             Float  @default(0)    // CH: Säule 3a balance
   wealthTaxRate        Float  @default(0.005) // CH: cantonal wealth tax (approx)
+  // Income-freedom + household strategy (CH)
+  targetMonthlyPayout  Float  @default(0)     // short-term goal, e.g. 15-20k CHF/month
+  companyProfit        Float  @default(0)     // annual distributable profit
+  ownerSalary          Float  @default(0)     // gross owner salary / year
+  partnerSalary        Float  @default(0)     // gross partner salary / year
+  marginalTaxRate      Float  @default(0.25)  // household marginal income tax
   updatedAt            DateTime @updatedAt
 }
 

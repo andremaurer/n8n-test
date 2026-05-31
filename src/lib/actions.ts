@@ -64,6 +64,91 @@ export async function deletePerson(formData: FormData) {
   revalidatePath("/people");
 }
 
+// ---- Accounts (multiple bank/P2P/pension positions) ------------------------
+export async function addAccount(formData: FormData) {
+  const personId = String(formData.get("personId"));
+  await prisma.account.create({
+    data: {
+      personId,
+      name: String(formData.get("name") || "Konto"),
+      institution: str(formData.get("institution")),
+      kind: String(formData.get("kind") || "BANK"),
+      currency: String(formData.get("currency") || "CHF"),
+      balance: num(formData.get("balance")) ?? 0,
+      expectedYield: (num(formData.get("expectedYieldPct")) ?? 0) / 100,
+      liquid: formData.get("liquid") === "on" || formData.get("liquid") === "true",
+      notes: str(formData.get("notes")),
+    },
+  });
+  revalidatePath("/finance");
+  revalidatePath("/");
+}
+
+export async function updateAccount(formData: FormData) {
+  const id = String(formData.get("id"));
+  await prisma.account.update({
+    where: { id },
+    data: {
+      name: String(formData.get("name") || "Konto"),
+      institution: str(formData.get("institution")),
+      kind: String(formData.get("kind") || "BANK"),
+      currency: String(formData.get("currency") || "CHF"),
+      balance: num(formData.get("balance")) ?? 0,
+      expectedYield: (num(formData.get("expectedYieldPct")) ?? 0) / 100,
+      liquid: formData.get("liquid") === "on" || formData.get("liquid") === "true",
+      notes: str(formData.get("notes")),
+    },
+  });
+  revalidatePath("/finance");
+  revalidatePath("/");
+}
+
+export async function deleteAccount(formData: FormData) {
+  await prisma.account.delete({ where: { id: String(formData.get("id")) } });
+  revalidatePath("/finance");
+  revalidatePath("/");
+}
+
+// ---- Revenue streams (path to 15-20k CHF/month) ----------------------------
+export async function addRevenueStream(formData: FormData) {
+  const personId = String(formData.get("personId"));
+  await prisma.revenueStream.create({
+    data: {
+      personId,
+      name: String(formData.get("name") || "Einkommensquelle"),
+      kind: String(formData.get("kind") || "ACTIVE"),
+      monthlyNow: num(formData.get("monthlyNow")) ?? 0,
+      monthlyTarget: num(formData.get("monthlyTarget")) ?? 0,
+      status: String(formData.get("status") || "BUILDING"),
+      notes: str(formData.get("notes")),
+    },
+  });
+  revalidatePath("/strategy");
+  revalidatePath("/");
+}
+
+export async function updateRevenueStream(formData: FormData) {
+  await prisma.revenueStream.update({
+    where: { id: String(formData.get("id")) },
+    data: {
+      name: String(formData.get("name") || "Einkommensquelle"),
+      kind: String(formData.get("kind") || "ACTIVE"),
+      monthlyNow: num(formData.get("monthlyNow")) ?? 0,
+      monthlyTarget: num(formData.get("monthlyTarget")) ?? 0,
+      status: String(formData.get("status") || "BUILDING"),
+      notes: str(formData.get("notes")),
+    },
+  });
+  revalidatePath("/strategy");
+  revalidatePath("/");
+}
+
+export async function deleteRevenueStream(formData: FormData) {
+  await prisma.revenueStream.delete({ where: { id: String(formData.get("id")) } });
+  revalidatePath("/strategy");
+  revalidatePath("/");
+}
+
 // ---- Finance ---------------------------------------------------------------
 export async function saveFinance(formData: FormData) {
   const personId = String(formData.get("personId"));
@@ -87,6 +172,25 @@ export async function saveFinance(formData: FormData) {
     create: { personId, ...data },
   });
   revalidatePath("/finance");
+  revalidatePath("/");
+}
+
+// ---- Household / income strategy (CH) --------------------------------------
+export async function saveStrategy(formData: FormData) {
+  const personId = String(formData.get("personId"));
+  const data = {
+    targetMonthlyPayout: num(formData.get("targetMonthlyPayout")) ?? 0,
+    companyProfit: num(formData.get("companyProfit")) ?? 0,
+    ownerSalary: num(formData.get("ownerSalary")) ?? 0,
+    partnerSalary: num(formData.get("partnerSalary")) ?? 0,
+    marginalTaxRate: (num(formData.get("marginalTaxRatePct")) ?? 25) / 100,
+  };
+  await prisma.financeProfile.upsert({
+    where: { personId },
+    update: data,
+    create: { personId, ...data },
+  });
+  revalidatePath("/strategy");
   revalidatePath("/");
 }
 

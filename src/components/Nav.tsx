@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/", label: "Dashboard", emoji: "🧭" },
   { href: "/people", label: "Profile", emoji: "👤" },
   { href: "/finance", label: "Freiheit & Geld", emoji: "💸" },
+  { href: "/strategy", label: "Einkommens-Strategie", emoji: "📈" },
   { href: "/business", label: "Geschäftsfelder", emoji: "🚀" },
   { href: "/constellations", label: "Konstellationen", emoji: "🕸️" },
   { href: "/freedom", label: "Praxis & Journal", emoji: "🌱" },

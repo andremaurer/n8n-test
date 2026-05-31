@@ -24,6 +24,18 @@ export default async function Dashboard() {
     take: 8,
   });
 
+  // Income-freedom snapshot (your short-term 15-20k/month goal).
+  const [financeRow, accounts, streams] = await Promise.all([
+    prisma.financeProfile.findUnique({ where: { personId: person.id } }),
+    prisma.account.findMany({ where: { personId: person.id } }),
+    prisma.revenueStream.findMany({ where: { personId: person.id } }),
+  ]);
+  const targetPayout = financeRow?.targetMonthlyPayout || 0;
+  const incomeNow =
+    streams.reduce((s, x) => s + x.monthlyNow, 0) +
+    accounts.reduce((s, a) => s + (a.balance > 0 ? a.balance * a.expectedYield : 0), 0) / 12;
+  const incomePct = targetPayout > 0 ? Math.min(100, (incomeNow / targetPayout) * 100) : 0;
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -79,6 +91,16 @@ export default async function Dashboard() {
       </Card>
 
       {/* Freedom progress */}
+      {targetPayout > 0 && (
+        <Card title="Einkommens-Freiheit · kurzfristiges Ziel" level="EVIDENCE" action={<Link href="/strategy" className="btn-ghost">Strategie</Link>}>
+          <div className="mb-1 flex justify-between text-sm text-slate-300">
+            <span>{fmt(incomeNow)} CHF/Monat aktuell</span>
+            <span>Ziel {fmt(targetPayout)} CHF/Monat · {Math.round(incomePct)}%</span>
+          </div>
+          <Bar value={incomePct} color={incomePct >= 100 ? "#34d399" : "#7c6cf6"} />
+        </Card>
+      )}
+
       <Card title="Weg zur finanziellen Freiheit" level="EVIDENCE" action={<Link href="/finance" className="btn-ghost">Bearbeiten</Link>}>
         {fire ? (
           <div className="space-y-4">
