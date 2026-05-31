@@ -42,6 +42,29 @@ model Person {
   ikigai            Ikigai?
   accounts          Account[]
   revenueStreams    RevenueStream[]
+  experiments       Experiment[]
+}
+
+// Market-validation experiment — test an offer before investing heavily.
+// "Riskiest assumption test": define what you believe, how you'll test it cheaply,
+// the success threshold, and the result.
+model Experiment {
+  id           String   @id @default(cuid())
+  personId     String
+  person       Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  title        String   // e.g. "KMU zahlen 3'000 CHF für AI-Audit"
+  hypothesis   String   @default("") // what you believe is true
+  method       String   @default("") // how you test it (calls, landing page, BNI pitch)
+  riskiest     String   @default("") // the riskiest assumption
+  metric       String   @default("") // what you measure (e.g. "zahlende Zusagen")
+  threshold    Float    @default(0) // success threshold for the metric
+  result       Float?   // actual measured value
+  cost         Float    @default(0) // CHF spent on the test
+  status       String   @default("PLANNED") // PLANNED | RUNNING | VALIDATED | INVALIDATED
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  @@index([personId])
 }
 
 // Wheel of Life — 8 life areas scored 1-10, recurring check-in.

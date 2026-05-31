@@ -91,9 +91,66 @@ export interface BigFiveScores {
   N: number; // each 1-5 (mean of 10 items)
 }
 
-export function scoreBigFive(answers: Record<number, number>): BigFiveScores {
+// Extra 50 items (10 per factor) → combined with IPIP50 forms a 100-item set.
+// Public-domain IPIP markers; ids offset by 100 to avoid clashing with IPIP50.
+export const IPIP_EXTRA: AssessmentItem[] = [
+  { id: 101, text: "Ich mag es, mit Theorien zu spielen.", factor: "O", reverse: false },
+  { id: 102, text: "Ich vermeide philosophische Diskussionen.", factor: "O", reverse: true },
+  { id: 103, text: "Ich liebe es, über Kunst und Schönheit nachzudenken.", factor: "O", reverse: false },
+  { id: 104, text: "Ich brauche keine kreativen Hobbys.", factor: "O", reverse: true },
+  { id: 105, text: "Ich sehe in allem tiefere Bedeutung.", factor: "O", reverse: false },
+  { id: 106, text: "Ich ziehe Bekanntes dem Neuen vor.", factor: "O", reverse: true },
+  { id: 107, text: "Ich probiere gern neue Dinge aus.", factor: "O", reverse: false },
+  { id: 108, text: "Ich interessiere mich für viele Themen.", factor: "O", reverse: false },
+  { id: 109, text: "Ich halte mich an erprobte Methoden.", factor: "O", reverse: true },
+  { id: 110, text: "Ich stelle Bestehendes gern infrage.", factor: "O", reverse: false },
+  { id: 111, text: "Ich erledige meine Pflichten sofort.", factor: "C", reverse: false },
+  { id: 112, text: "Ich verschwende meine Zeit.", factor: "C", reverse: true },
+  { id: 113, text: "Ich arbeite nach einem klaren Plan.", factor: "C", reverse: false },
+  { id: 114, text: "Es fällt mir schwer, mich zu konzentrieren.", factor: "C", reverse: true },
+  { id: 115, text: "Ich halte meine Versprechen.", factor: "C", reverse: false },
+  { id: 116, text: "Ich treffe Entscheidungen ohne nachzudenken.", factor: "C", reverse: true },
+  { id: 117, text: "Ich strebe nach Exzellenz.", factor: "C", reverse: false },
+  { id: 118, text: "Ich lasse mich leicht ablenken.", factor: "C", reverse: true },
+  { id: 119, text: "Ich bin zuverlässig.", factor: "C", reverse: false },
+  { id: 120, text: "Ich handle oft ohne Plan.", factor: "C", reverse: true },
+  { id: 121, text: "Ich fühle mich wohl unter vielen Menschen.", factor: "E", reverse: false },
+  { id: 122, text: "Ich meide grosse Menschenmengen.", factor: "E", reverse: true },
+  { id: 123, text: "Ich knüpfe leicht neue Kontakte.", factor: "E", reverse: false },
+  { id: 124, text: "Ich bevorzuge es, allein zu arbeiten.", factor: "E", reverse: true },
+  { id: 125, text: "Ich strahle Energie aus.", factor: "E", reverse: false },
+  { id: 126, text: "Ich rede ungern vor Gruppen.", factor: "E", reverse: true },
+  { id: 127, text: "Ich übernehme gern die Initiative.", factor: "E", reverse: false },
+  { id: 128, text: "Ich bin lieber Zuhörer als Sprecher.", factor: "E", reverse: true },
+  { id: 129, text: "Ich suche Aufregung und Abwechslung.", factor: "E", reverse: false },
+  { id: 130, text: "Ich bin zurückhaltend und still.", factor: "E", reverse: true },
+  { id: 131, text: "Ich vertraue anderen Menschen.", factor: "A", reverse: false },
+  { id: 132, text: "Ich bin anderen gegenüber misstrauisch.", factor: "A", reverse: true },
+  { id: 133, text: "Ich helfe gern ohne Hintergedanken.", factor: "A", reverse: false },
+  { id: 134, text: "Ich nutze andere für meine Zwecke.", factor: "A", reverse: true },
+  { id: 135, text: "Ich bin nachsichtig mit Fehlern.", factor: "A", reverse: false },
+  { id: 136, text: "Ich kann hart und kühl sein.", factor: "A", reverse: true },
+  { id: 137, text: "Ich nehme Rücksicht auf andere.", factor: "A", reverse: false },
+  { id: 138, text: "Ich setze meine Interessen über die anderer.", factor: "A", reverse: true },
+  { id: 139, text: "Ich bin kooperativ.", factor: "A", reverse: false },
+  { id: 140, text: "Ich streite gern.", factor: "A", reverse: true },
+  { id: 141, text: "Ich bleibe auch unter Druck ruhig.", factor: "N", reverse: true },
+  { id: 142, text: "Ich mache mir oft Sorgen.", factor: "N", reverse: false },
+  { id: 143, text: "Ich fühle mich selten ängstlich.", factor: "N", reverse: true },
+  { id: 144, text: "Ich werde leicht nervös.", factor: "N", reverse: false },
+  { id: 145, text: "Meine Stimmung ist stabil.", factor: "N", reverse: true },
+  { id: 146, text: "Ich fühle mich oft angespannt.", factor: "N", reverse: false },
+  { id: 147, text: "Ich erhole mich schnell von Rückschlägen.", factor: "N", reverse: true },
+  { id: 148, text: "Ich grüble über Probleme.", factor: "N", reverse: false },
+  { id: 149, text: "Ich bin emotional ausgeglichen.", factor: "N", reverse: true },
+  { id: 150, text: "Kleinigkeiten bringen mich aus der Fassung.", factor: "N", reverse: false },
+];
+
+export const IPIP100: AssessmentItem[] = [...IPIP50, ...IPIP_EXTRA];
+
+export function scoreBigFive(answers: Record<number, number>, items: AssessmentItem[] = IPIP50): BigFiveScores {
   const acc: Record<BigFiveFactor, number[]> = { O: [], C: [], E: [], A: [], N: [] };
-  for (const item of IPIP50) {
+  for (const item of items) {
     const raw = answers[item.id];
     if (!raw) continue;
     const val = item.reverse ? 6 - raw : raw;

@@ -149,6 +149,39 @@ export async function deleteRevenueStream(formData: FormData) {
   revalidatePath("/");
 }
 
+// ---- Market-validation experiments -----------------------------------------
+export async function addExperiment(formData: FormData) {
+  const personId = String(formData.get("personId"));
+  await prisma.experiment.create({
+    data: {
+      personId,
+      title: String(formData.get("title") || "Experiment"),
+      hypothesis: String(formData.get("hypothesis") || ""),
+      method: String(formData.get("method") || ""),
+      riskiest: String(formData.get("riskiest") || ""),
+      metric: String(formData.get("metric") || ""),
+      threshold: num(formData.get("threshold")) ?? 0,
+      cost: num(formData.get("cost")) ?? 0,
+      status: String(formData.get("status") || "PLANNED"),
+      notes: str(formData.get("notes")),
+    },
+  });
+  revalidatePath("/validate");
+}
+
+export async function updateExperimentResult(formData: FormData) {
+  const id = String(formData.get("id"));
+  const result = num(formData.get("result"));
+  const status = String(formData.get("status") || "RUNNING");
+  await prisma.experiment.update({ where: { id }, data: { result, status } });
+  revalidatePath("/validate");
+}
+
+export async function deleteExperiment(formData: FormData) {
+  await prisma.experiment.delete({ where: { id: String(formData.get("id")) } });
+  revalidatePath("/validate");
+}
+
 // ---- Finance ---------------------------------------------------------------
 export async function saveFinance(formData: FormData) {
   const personId = String(formData.get("personId"));
