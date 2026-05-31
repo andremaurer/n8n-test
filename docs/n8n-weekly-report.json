@@ -1,0 +1,46 @@
+{
+  "name": "Lebens-Optimierer – Wochenreport",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "weeks", "weekday": 1, "triggerAtHour": 8 }] }
+      },
+      "id": "schedule",
+      "name": "Jeden Montag 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [260, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.OPTIMIZER_BASE_URL }}/api/report/weekly",
+        "options": {}
+      },
+      "id": "http",
+      "name": "Report holen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.REPORT_FROM }}",
+        "toEmail": "={{ $env.REPORT_TO }}",
+        "subject": "=Dein Wochenreport – {{ $now.format('dd.MM.yyyy') }}",
+        "text": "={{ $json.text }}",
+        "options": {}
+      },
+      "id": "email",
+      "name": "Per E-Mail senden",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [740, 300]
+    }
+  ],
+  "connections": {
+    "Jeden Montag 08:00": { "main": [[{ "node": "Report holen", "type": "main", "index": 0 }]] },
+    "Report holen": { "main": [[{ "node": "Per E-Mail senden", "type": "main", "index": 0 }]] }
+  },
+  "settings": {},
+  "_comment": "Setze OPTIMIZER_BASE_URL (z.B. http://host.docker.internal:3000), REPORT_FROM, REPORT_TO als n8n-Env. SMTP-Credential im Email-Node hinterlegen."
+}
