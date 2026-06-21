@@ -1,0 +1,9 @@
+node_modules/
+.env
+*.log
+voices/
+.venv/
+__pycache__/
+data/
+*.wav
+*.tmp

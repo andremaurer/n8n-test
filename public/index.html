@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f1115" />
+  <title>VoiceClaude</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Login -->
+  <div id="login" class="screen hidden">
+    <div class="login-card">
+      <h1>🎙️ VoiceClaude</h1>
+      <p class="muted">Dein deutsches Sprach-Interface für Claude</p>
+      <input id="password" type="password" placeholder="Passwort" autocomplete="current-password" />
+      <button id="loginBtn">Anmelden</button>
+      <div id="loginError" class="error"></div>
+    </div>
+  </div>
+
+  <!-- Haupt-App -->
+  <div id="app" class="screen hidden">
+    <header>
+      <span class="brand">🎙️ VoiceClaude</span>
+      <div class="header-actions">
+        <button id="newChatBtn" class="ghost" title="Neues Gespräch">＋ Neu</button>
+        <button id="logoutBtn" class="ghost" title="Abmelden">Abmelden</button>
+      </div>
+    </header>
+
+    <main id="conversation"></main>
+
+    <!-- Audio-Player für die letzte Antwort -->
+    <section id="player" class="player hidden">
+      <audio id="audio" preload="auto"></audio>
+      <div class="player-row">
+        <button id="back10" class="circle" title="10 Sekunden zurück">«10</button>
+        <button id="playPause" class="circle big" title="Wiedergabe / Pause">▶</button>
+        <button id="fwd10" class="circle" title="10 Sekunden vor">10»</button>
+        <div class="seek-wrap">
+          <input id="seek" type="range" min="0" max="100" value="0" step="0.1" />
+          <div class="times"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+        </div>
+        <button id="speed" class="speed" title="Geschwindigkeit">1×</button>
+      </div>
+    </section>
+
+    <footer>
+      <div id="status" class="status muted">Tippe auf das Mikrofon und sprich.</div>
+      <button id="micBtn" class="mic" title="Aufnahme starten/stoppen">
+        <span class="mic-icon">🎤</span>
+      </button>
+      <form id="textForm" class="text-form">
+        <input id="textInput" type="text" placeholder="…oder hier tippen" autocomplete="off" />
+        <button type="submit" class="send">➤</button>
+      </form>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
