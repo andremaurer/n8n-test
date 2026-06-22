@@ -5,13 +5,12 @@ Stellt zwei Endpunkte bereit:
   POST /transcribe   Audio (multipart "audio") -> {"text": "..."}   (Whisper, offline)
   POST /tts          JSON {"text": "..."}      -> audio/wav         (Piper, offline)
 
-Beide Modelle werden EINMAL beim Start geladen und bleiben im Speicher,
-damit jede Anfrage schnell ist und nichts "abreisst".
+Whisper wird einmal beim Start geladen und bleibt im Speicher.
+Piper laeuft als Standalone-Binary (kein pip noetig) -> robust auf jeder Python-Version.
 """
 
-import io
 import os
-import wave
+import subprocess
 import tempfile
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
@@ -21,13 +20,14 @@ from pydantic import BaseModel
 # ---- Konfiguration aus Umgebungsvariablen ----
 WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
 WHISPER_COMPUTE = os.environ.get("WHISPER_COMPUTE", "int8")
-PIPER_MODEL = os.environ.get("PIPER_MODEL", "./voices/de_DE-thorsten-medium.onnx")
+PIPER_MODEL = os.path.abspath(os.environ.get("PIPER_MODEL", "./voices/de_DE-thorsten-medium.onnx"))
+PIPER_BIN = os.path.abspath(os.environ.get("PIPER_BIN", "./piper/piper"))
+PIPER_DIR = os.path.dirname(PIPER_BIN)
 MEDIA_PORT = int(os.environ.get("MEDIA_PORT", "8001"))
 
 app = FastAPI(title="VoiceClaude Media")
 
 _whisper = None
-_piper = None
 
 
 def get_whisper():
@@ -41,40 +41,27 @@ def get_whisper():
     return _whisper
 
 
-def get_piper():
-    """Piper-Stimme lazy laden."""
-    global _piper
-    if _piper is None:
-        from piper import PiperVoice
-        if not os.path.exists(PIPER_MODEL):
-            raise RuntimeError(
-                f"Piper-Stimme nicht gefunden: {PIPER_MODEL}. "
-                f"Bitte zuerst scripts/install.sh ausfuehren."
-            )
-        config_path = PIPER_MODEL + ".json"
-        config_path = config_path if os.path.exists(config_path) else None
-        print(f"[media] Lade Piper-Stimme '{PIPER_MODEL}' ...", flush=True)
-        _piper = PiperVoice.load(PIPER_MODEL, config_path=config_path)
-        print("[media] Piper bereit.", flush=True)
-    return _piper
-
-
 @app.on_event("startup")
 def _warmup():
-    # Modelle direkt beim Start laden, damit die erste echte Anfrage schnell ist.
+    # Whisper direkt beim Start laden, damit die erste echte Anfrage schnell ist.
     try:
         get_whisper()
     except Exception as e:  # noqa: BLE001
         print(f"[media] WARN Whisper-Warmup: {e}", flush=True)
-    try:
-        get_piper()
-    except Exception as e:  # noqa: BLE001
-        print(f"[media] WARN Piper-Warmup: {e}", flush=True)
+    if not os.path.exists(PIPER_BIN):
+        print(f"[media] WARN Piper-Binary fehlt: {PIPER_BIN}", flush=True)
+    if not os.path.exists(PIPER_MODEL):
+        print(f"[media] WARN Piper-Stimme fehlt: {PIPER_MODEL}", flush=True)
 
 
 @app.get("/health")
 def health():
-    return {"ok": True, "whisper": WHISPER_MODEL, "piper": os.path.basename(PIPER_MODEL)}
+    return {
+        "ok": True,
+        "whisper": WHISPER_MODEL,
+        "piper_bin": os.path.exists(PIPER_BIN),
+        "piper_voice": os.path.exists(PIPER_MODEL),
+    }
 
 
 @app.post("/transcribe")
@@ -114,12 +101,32 @@ def tts(req: TTSRequest):
     text = (req.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Kein Text")
-    voice = get_piper()
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wav_file:
-        # piper-tts 1.2.0: synthesize(text, wav_file) schreibt 16-bit Mono-WAV
-        voice.synthesize(text, wav_file)
-    return Response(content=buf.getvalue(), media_type="audio/wav")
+    if not os.path.exists(PIPER_BIN):
+        raise HTTPException(status_code=500, detail=f"Piper-Binary fehlt: {PIPER_BIN}")
+    if not os.path.exists(PIPER_MODEL):
+        raise HTTPException(status_code=500, detail=f"Piper-Stimme fehlt: {PIPER_MODEL}")
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        out_path = tmp.name
+    try:
+        proc = subprocess.run(
+            [PIPER_BIN, "--model", PIPER_MODEL, "--output_file", out_path],
+            input=text.encode("utf-8"),
+            capture_output=True,
+            cwd=PIPER_DIR,            # damit das Binary seine espeak-ng-Daten findet
+            timeout=120,
+        )
+        if proc.returncode != 0:
+            msg = proc.stderr.decode("utf-8", "ignore")[:500] or "Piper-Fehler"
+            raise HTTPException(status_code=500, detail=msg)
+        with open(out_path, "rb") as f:
+            audio_bytes = f.read()
+        return Response(content=audio_bytes, media_type="audio/wav")
+    finally:
+        try:
+            os.unlink(out_path)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

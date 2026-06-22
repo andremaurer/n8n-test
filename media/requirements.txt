@@ -1,6 +1,6 @@
-# Python-Abhaengigkeiten fuer den Media-Dienst (Whisper STT + Piper TTS)
+# Python-Abhaengigkeiten fuer den Media-Dienst (Whisper STT)
+# TTS (Piper) laeuft ueber das Standalone-Binary, nicht ueber pip -> robust auf allen Python-Versionen.
 fastapi==0.115.6
 uvicorn==0.34.0
 python-multipart==0.0.19
 faster-whisper==1.1.0
-piper-tts==1.2.0

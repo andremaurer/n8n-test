@@ -47,7 +47,24 @@ python3 -m venv .venv
 ./.venv/bin/pip install --upgrade pip
 ./.venv/bin/pip install -r media/requirements.txt
 
-# ---------- 6. Deutsche Piper-Stimme herunterladen ----------
+# ---------- 6a. Piper-Standalone-Binary herunterladen ----------
+# (kein pip noetig -> funktioniert auf jeder Python-Version, inkl. 3.12)
+if [ ! -x "$DIR/piper/piper" ]; then
+  ARCH="$(uname -m)"
+  case "$ARCH" in
+    x86_64|amd64) PIPER_PKG="piper_linux_x86_64.tar.gz" ;;
+    aarch64|arm64) PIPER_PKG="piper_linux_aarch64.tar.gz" ;;
+    armv7l) PIPER_PKG="piper_linux_armv7l.tar.gz" ;;
+    *) echo "WARN: Unbekannte Architektur '$ARCH', versuche x86_64"; PIPER_PKG="piper_linux_x86_64.tar.gz" ;;
+  esac
+  echo "==> Lade Piper-Binary ($PIPER_PKG) ..."
+  curl -fL "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/$PIPER_PKG" -o /tmp/piper.tar.gz
+  tar -xzf /tmp/piper.tar.gz -C "$DIR"   # entpackt nach $DIR/piper/
+  rm -f /tmp/piper.tar.gz
+fi
+echo "==> Piper-Binary bereit: $DIR/piper/piper"
+
+# ---------- 6b. Deutsche Piper-Stimme herunterladen ----------
 VOICE_DIR="$DIR/voices"
 mkdir -p "$VOICE_DIR"
 BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/medium"
